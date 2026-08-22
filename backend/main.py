@@ -1,16 +1,22 @@
-from fastapi import FastAPI, HTTPException, Header, Depends, status
+from fastapi import FastAPI, HTTPException, Header, Depends, status, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 import os
 import re
+import datetime
 from dotenv import load_dotenv
 
 # Load env variables from .env file if it exists
 load_dotenv()
 
 # Import database and authentication helper functions
-from database import get_user_by_email, create_user, DB_PATH
+from database import (
+    get_user_by_email, create_user, DB_PATH,
+    get_all_contacts, get_contact_by_id,
+    get_all_recommendations, get_recommendation_by_id, create_recommendation,
+    upvote_recommendation, get_user_votes, has_user_voted
+)
 from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
 
 app = FastAPI(title="CommUnity API")
@@ -27,7 +33,8 @@ app.add_middleware(
 # Email verification regex (simple, standard format validation)
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
-# Pydantic Schemas for validation
+# ─── Pydantic Schemas ──────────────────────────────────────────────────────────
+
 class SignupRequest(BaseModel):
     name: str
     email: str
@@ -39,17 +46,25 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
-# API verification endpoint
+class CreateRecommendationRequest(BaseModel):
+    service_name: str
+    category: str
+    description: str
+    contact_info: str = ""
+
+# ─── Status ───────────────────────────────────────────────────────────────────
+
 @app.get("/api/status")
 def get_status():
     return {
         "status": "connected",
         "message": "Hello from the CommUnity FastAPI Backend!",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "database_file": DB_PATH
     }
 
-# Signup endpoint
+# ─── Auth Endpoints ───────────────────────────────────────────────────────────
+
 @app.post("/api/auth/signup")
 def signup(payload: SignupRequest):
     name = payload.name.strip()
@@ -58,61 +73,27 @@ def signup(payload: SignupRequest):
     password = payload.password
     confirm_password = payload.confirm_password
 
-    # Validation: Check empty inputs
     if not name or not email or not flat_number or not password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="All fields are required"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="All fields are required")
 
-    # Validation: Email format validation
     if not EMAIL_REGEX.match(email):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid email format"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
 
-    # Validation: Passwords matching
     if password != confirm_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Passwords do not match"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwords do not match")
 
-    # Validation: Password strength (basic check)
     if len(password) < 6:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 6 characters long"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 6 characters long")
 
-    # Prevent duplicate registration
-    existing_user = get_user_by_email(email)
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email address is already registered"
-        )
+    if get_user_by_email(email):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email address is already registered")
 
-    # Securely hash password
     hashed_pwd = hash_password(password)
-
-    # Save to SQLite with default "Resident" role
-    new_user = create_user(
-        name=name,
-        email=email,
-        flat_number=flat_number,
-        hashed_password=hashed_pwd,
-        role="Resident"
-    )
+    new_user = create_user(name=name, email=email, flat_number=flat_number, hashed_password=hashed_pwd, role="Resident")
 
     if not new_user:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to register user. Please try again."
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to register user. Please try again.")
 
-    # Return registered user profile, omitting sensitive hashed password
     return {
         "id": new_user["id"],
         "name": new_user["name"],
@@ -121,90 +102,151 @@ def signup(payload: SignupRequest):
         "role": new_user["role"]
     }
 
-# Login endpoint
 @app.post("/api/auth/login")
 def login(payload: LoginRequest):
     email = payload.email.strip().lower()
     password = payload.password
 
     if not email or not password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email and password are required"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email and password are required")
 
-    # Lookup user
     user = get_user_by_email(email)
-    
-    # Generic, secure validation response (prevents account enumeration)
     if not user or not verify_password(password, user["hashed_password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
-    # Create JWT access token
-    token_data = {
-        "sub": user["email"],
-        "name": user["name"],
-        "role": user["role"]
-    }
+    token_data = {"sub": user["email"], "name": user["name"], "role": user["role"], "id": user["id"]}
     access_token = create_access_token(data=token_data)
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    return {"access_token": access_token, "token_type": "bearer"}
 
-# Dependency helper to extract current authenticated user from header
+# ─── Auth Dependency ──────────────────────────────────────────────────────────
+
 def get_current_user(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token is missing or malformed"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication token is missing or malformed")
+
     token = authorization.split(" ")[1]
     payload = decode_access_token(token)
-    
+
     if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired or is invalid"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired or is invalid")
+
     email = payload.get("sub")
     if not email:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload"
-        )
-        
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+
     user = get_user_by_email(email)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authenticated user no longer exists"
-        )
-        
-    # Return user details excluding hashed password
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authenticated user no longer exists")
+
     user_profile = dict(user)
     user_profile.pop("hashed_password", None)
     return user_profile
 
-# Protected profile/me endpoint
 @app.get("/api/auth/me")
 def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
+# ─── Contacts Endpoints ───────────────────────────────────────────────────────
 
-# Find frontend directory path relative to this file
+@app.get("/api/contacts")
+def list_contacts(
+    category: str = Query(default=None),
+    search: str = Query(default=None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Returns community contacts, optionally filtered by category and/or search text."""
+    return get_all_contacts(category=category, search=search)
+
+@app.get("/api/contacts/{contact_id}")
+def get_contact(contact_id: int, current_user: dict = Depends(get_current_user)):
+    """Returns a single community contact by ID."""
+    contact = get_contact_by_id(contact_id)
+    if not contact:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+    return contact
+
+# ─── Recommendations Endpoints ────────────────────────────────────────────────
+
+@app.get("/api/recommendations")
+def list_recommendations(
+    category: str = Query(default=None),
+    search: str = Query(default=None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Returns all recommendations, optionally filtered, sorted by votes descending."""
+    recs = get_all_recommendations(category=category, search=search)
+    user_id = current_user["id"]
+    user_voted_ids = get_user_votes(user_id)
+    for r in recs:
+        r["user_has_voted"] = r["id"] in user_voted_ids
+    return recs
+
+@app.get("/api/recommendations/{rec_id}")
+def get_recommendation(rec_id: int, current_user: dict = Depends(get_current_user)):
+    """Returns a single recommendation by ID."""
+    rec = get_recommendation_by_id(rec_id)
+    if not rec:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
+    rec["user_has_voted"] = has_user_voted(rec_id, current_user["id"])
+    return rec
+
+@app.post("/api/recommendations")
+def add_recommendation(
+    payload: CreateRecommendationRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Creates a new recommendation associated with the authenticated resident."""
+    service_name = payload.service_name.strip()
+    category = payload.category.strip()
+    description = payload.description.strip()
+    contact_info = payload.contact_info.strip() if payload.contact_info else ""
+
+    if not service_name or not category or not description:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Service name, category, and description are required")
+
+    valid_categories = ["Broadband", "Plumber", "Electrician", "AC Service", "Appliance Repair",
+                        "Cleaning", "Tutor", "Healthcare", "Laundry", "Other"]
+    if category not in valid_categories:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category. Choose from: {', '.join(valid_categories)}")
+
+    created_date = datetime.date.today().isoformat()
+    rec = create_recommendation(
+        service_name=service_name,
+        category=category,
+        description=description,
+        contact_info=contact_info,
+        user_id=current_user["id"],
+        user_name=current_user["name"],
+        created_date=created_date
+    )
+
+    if not rec:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save recommendation")
+
+    rec["user_has_voted"] = False
+    return rec
+
+@app.post("/api/recommendations/{rec_id}/vote")
+def vote_recommendation(rec_id: int, current_user: dict = Depends(get_current_user)):
+    """Casts an upvote from the authenticated resident. Each resident can vote once per recommendation."""
+    rec = get_recommendation_by_id(rec_id)
+    if not rec:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
+
+    voted_date = datetime.date.today().isoformat()
+    updated = upvote_recommendation(rec_id=rec_id, user_id=current_user["id"], voted_date=voted_date)
+
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You have already voted for this recommendation")
+
+    updated["user_has_voted"] = True
+    return updated
+
+
+# ─── Serve Frontend ───────────────────────────────────────────────────────────
+
 current_dir = os.path.dirname(os.path.realpath(__file__))
 frontend_dir = os.path.abspath(os.path.join(current_dir, "..", "frontend"))
-
-# Ensure the frontend directory exists
 os.makedirs(frontend_dir, exist_ok=True)
-
-# Mount the static files at the root level.
-# API routes must be declared before mounting StaticFiles to avoid path conflicts.
 app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
