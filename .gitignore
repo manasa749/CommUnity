@@ -1,7 +1,23 @@
-node_modules/
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.pyc
-.venv/
+*.pyo
+*.pyd
+
+# Databases & SQLite
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+community.db
+test_community.db
+
+# Virtual environments
+backend/venv/
 venv/
+ENV/
+env/
+
+# Environment configurations
 .env
-.env.*
+backend/.env
