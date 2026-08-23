@@ -203,6 +203,7 @@ function RecommendationsPage({ token }) {
     const [error, setError] = React.useState("");
     const [search, setSearch] = React.useState("");
     const [category, setCategory] = React.useState("All");
+    const [sortBy, setSortBy] = React.useState("votes"); // "votes" | "newest"
     const [selected, setSelected] = React.useState(null);
     const [voteMsg, setVoteMsg] = React.useState("");
 
@@ -287,6 +288,15 @@ function RecommendationsPage({ token }) {
         );
     }
 
+    // Client-side sorting
+    const sortedRecs = [...recs].sort((a, b) => {
+        if (sortBy === "newest") {
+            return new Date(b.created_date) - new Date(a.created_date) || b.vote_count - a.vote_count;
+        } else {
+            return b.vote_count - a.vote_count || new Date(b.created_date) - new Date(a.created_date);
+        }
+    });
+
     // List view
     return (
         <div className="card">
@@ -294,26 +304,37 @@ function RecommendationsPage({ token }) {
                 <h2>Trusted Recommendations</h2>
                 <button className="btn-primary btn-sm" onClick={() => setView("add")}>+ Add</button>
             </div>
-            <p className="info-text">Browse service recommendations shared by your neighbours, sorted by community votes.</p>
+            <p className="info-text">Browse service recommendations shared by your neighbours.</p>
 
-            <form onSubmit={handleSearch} className="search-bar">
-                <input
-                    type="text"
-                    placeholder="Search recommendations..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                />
-                <button type="submit" className="btn-primary btn-sm">Search</button>
-            </form>
-
-            <div className="filter-tabs">
-                {REC_CATEGORIES.map(cat => (
-                    <button
-                        key={cat}
-                        className={`filter-tab ${category === cat ? "active" : ""}`}
-                        onClick={() => handleCategoryChange(cat)}
-                    >{cat}</button>
-                ))}
+            <div className="controls-row">
+                <form onSubmit={handleSearch} className="search-bar-compact">
+                    <input
+                        type="text"
+                        placeholder="Search recommendations..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                    <button type="submit" className="btn-primary btn-sm">Search</button>
+                </form>
+                <div className="filter-sort-controls">
+                    <select
+                        value={category}
+                        onChange={e => handleCategoryChange(e.target.value)}
+                        className="control-select"
+                    >
+                        {REC_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat === "All" ? "All Categories" : cat}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={sortBy}
+                        onChange={e => setSortBy(e.target.value)}
+                        className="control-select"
+                    >
+                        <option value="votes">Most Recommended</option>
+                        <option value="newest">Newest</option>
+                    </select>
+                </div>
             </div>
 
             {loading && <p className="loading-text">Loading recommendations...</p>}
@@ -325,26 +346,29 @@ function RecommendationsPage({ token }) {
 
             {!loading && recs.length > 0 && (
                 <div className="list">
-                    {recs.map(r => (
-                        <div key={r.id} className="list-item rec-list-item">
+                    {sortedRecs.map(r => (
+                        <div key={r.id} className="list-item compact-rec-card">
                             <div className="list-item-main" onClick={() => { setSelected(r); setView("detail"); setVoteMsg(""); }}>
-                                <span className="list-item-title">{r.service_name}</span>
-                                <span className="list-item-sub">{r.description.length > 90 ? r.description.slice(0, 90) + "…" : r.description}</span>
-                                <span className="rec-meta">
+                                <div className="rec-card-header">
+                                    <span className="list-item-title">{r.service_name}</span>
                                     <span className={`category-badge cat-${r.category.toLowerCase().replace(" ", "-")}`}>{r.category}</span>
-                                    <span className="rec-by">by {r.created_by_name}</span>
-                                </span>
-                            </div>
-                            <div className="list-item-right">
-                                <div className="vote-block-inline">
-                                    <span className="vote-count">{r.vote_count}</span>
-                                    <button
-                                        className={`btn-vote-sm ${r.user_has_voted ? "voted" : ""}`}
-                                        onClick={() => !r.user_has_voted && handleVote(r)}
-                                        disabled={r.user_has_voted}
-                                        title={r.user_has_voted ? "Already voted" : "Upvote"}
-                                    >▲</button>
                                 </div>
+                                <span className="list-item-sub compact-desc">
+                                    {r.description.length > 85 ? r.description.slice(0, 85) + "…" : r.description}
+                                </span>
+                                <div className="rec-card-footer">
+                                    <span className="rec-by">by {r.created_by_name}</span>
+                                </div>
+                            </div>
+                            <div className="list-item-right-compact">
+                                <button
+                                    className={`btn-vote-compact ${r.user_has_voted ? "voted" : ""}`}
+                                    onClick={() => !r.user_has_voted && handleVote(r)}
+                                    disabled={r.user_has_voted}
+                                    title={r.user_has_voted ? "Already voted" : "Upvote"}
+                                >
+                                    ▲ {r.vote_count}
+                                </button>
                             </div>
                         </div>
                     ))}
@@ -353,7 +377,6 @@ function RecommendationsPage({ token }) {
         </div>
     );
 }
-
 // ─── App Root ─────────────────────────────────────────────────────────────────
 
 function App() {
@@ -362,6 +385,7 @@ function App() {
     const [user, setUser] = React.useState(null);
     const [loading, setLoading] = React.useState(!!token);
     const [currentPage, setCurrentPage] = React.useState(token ? "dashboard" : "login");
+    const [menuOpen, setMenuOpen] = React.useState(false);
 
     // Status connection state
     const [backendStatus, setBackendStatus] = React.useState({
@@ -555,8 +579,8 @@ function App() {
     };
 
     return (
-        <div className="app-container">
-            <header className="header">
+        <div className="app-container" onClick={() => setMenuOpen(false)}>
+            <header className="header" onClick={e => e.stopPropagation()}>
                 <div className="logo-container">
                     <span className="logo-icon">🏘️</span>
                     <span className="logo-text">CommUnity</span>
@@ -567,8 +591,7 @@ function App() {
                             ["dashboard",       "Dashboard"],
                             ["contacts",        "Contacts"],
                             ["recommendations", "Recommendations"],
-                            ["issues",          "Issues"],
-                            ["profile",         "Profile"]
+                            ["issues",          "Issues"]
                         ].map(([page, label]) => (
                             <button key={page}
                                 className={`nav-link ${currentPage === page ? "active" : ""}`}
@@ -578,8 +601,20 @@ function App() {
                     </nav>
                 )}
                 {user && (
-                    <div className="user-meta">
-                        <span className="user-name">📍 Unit {user.flat_number}</span>
+                    <div className="user-menu-container">
+                        <button className="user-menu-trigger" onClick={() => setMenuOpen(!menuOpen)}>
+                            👤 {user.name} ({user.flat_number}) <span className="arrow">▼</span>
+                        </button>
+                        {menuOpen && (
+                            <div className="user-dropdown">
+                                <button className="dropdown-item" onClick={() => { setCurrentPage("profile"); setMenuOpen(false); }}>
+                                    Profile
+                                </button>
+                                <button className="dropdown-item" onClick={() => { handleLogout(); setMenuOpen(false); }}>
+                                    Logout
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </header>

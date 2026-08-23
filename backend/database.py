@@ -86,26 +86,22 @@ def _seed_contacts():
     """Insert seed community contacts if the table is empty."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) as cnt FROM contacts WHERE is_seed = 1")
-    row = cursor.fetchone()
-    if row and row["cnt"] > 0:
-        conn.close()
-        return
+    # Delete existing seed contacts to allow changes to update immediately
+    cursor.execute("DELETE FROM contacts WHERE is_seed = 1")
 
     seed_contacts = [
         ("Suresh Nair",        "Community President",        "Management",  "+91 98400 11001", "president@community.in",   "Mon–Fri, 10am–6pm", 1),
         ("Meera Krishnamurthy","Community Secretary",         "Management",  "+91 98400 11002", "secretary@community.in",   "Mon–Sat, 9am–5pm",  1),
-        ("Ramesh Pillai",      "Treasurer",                  "Management",  "+91 98400 11003", "treasurer@community.in",   "Mon–Fri, 10am–4pm", 1),
         ("Anand Kumar",        "Maintenance Manager",         "Maintenance", "+91 98400 22001", "maintenance@community.in", "Mon–Sat, 8am–7pm",  1),
-        ("Vijay Mohan",        "Plumbing & Electrical Lead", "Maintenance", "+91 98400 22002", None,                       "Mon–Sat, 9am–6pm",  1),
         ("Lakshmi Sundaram",   "Housekeeping Supervisor",    "Maintenance", "+91 98400 22003", None,                       "Mon–Sat, 7am–5pm",  1),
-        ("Security Office",    "Main Gate Security Desk",    "Security",    "+91 98400 33001", None,                       "24 × 7",            1),
+        ("Vijay Mohan",        "Plumbing & Electrical Lead", "Maintenance", "+91 98400 22002", None,                       "Mon–Sat, 9am–6pm",  1),
         ("Babu Thomas",        "Head of Security",           "Security",    "+91 98400 33002", "security@community.in",    "Mon–Sat, 9am–6pm",  1),
+        ("Security Office",    "Main Gate Security Desk",    "Security",    "+91 98400 33001", None,                       "24 × 7",            1),
+        ("Ambulance / Police", "Emergency Services Helpline","Emergency",   "112",             None,                       "24 × 7",            1),
         ("KSEB Complaint Cell","Electricity Board Helpline", "Emergency",   "1800-425-0022",   None,                       "24 × 7",            1),
         ("KWA Helpline",       "Water Authority Helpline",   "Emergency",   "1916",            None,                       "24 × 7",            1),
-        ("Ambulance / Police", "Emergency Services",         "Emergency",   "112",             None,                       "24 × 7",            1),
-        ("Dr. Nisha Prasad",   "Nearest General Physician",  "Other",       "+91 98400 55001", None,                       "Mon–Sat, 9am–1pm",  1),
         ("Community Cab Pool", "Shared Transport Coordinator","Other",      "+91 98400 55002", "cabpool@community.in",     "7am–10pm",          1),
+        ("Ravi Shankar",       "General Facilities Coordinator","Other",    "+91 98400 55003", "facilities@community.in",  "Mon–Sat, 9am–6pm",  1),
     ]
 
     cursor.executemany(
