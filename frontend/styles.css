@@ -844,4 +844,53 @@ body {
     cursor: default;
 }
 
+/* Issue Status & Category Badge Styles */
+.status-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.725rem;
+    font-weight: 700;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    line-height: 1.2;
+}
+
+.status-badge.status-open {
+    background-color: #3b82f6; /* Blue */
+}
+
+.status-badge.status-assigned {
+    background-color: #6366f1; /* Indigo */
+}
+
+.status-badge.status-in-progress {
+    background-color: #f59e0b; /* Amber */
+}
+
+.status-badge.status-resolved {
+    background-color: #10b981; /* Green */
+}
+
+.status-badge.status-closed {
+    background-color: #64748b; /* Slate Gray */
+}
+
+.cat-water        { background-color: #e0f2fe; color: #0369a1; }
+.cat-lift         { background-color: #f3e8ff; color: #6b21a8; }
+.cat-parking      { background-color: #fef3c7; color: #92400e; }
+.cat-housekeeping { background-color: #e0f7fa; color: #006064; }
+.cat-electrical   { background-color: #ffedd5; color: #9a3412; }
+
+.attachment-link {
+    color: var(--primary-color);
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.attachment-link:hover {
+    color: #1d4ed8;
+}
+
 

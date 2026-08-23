@@ -75,6 +75,25 @@ def init_db():
         )
     """)
 
+    # Issues table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS issues (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            category TEXT NOT NULL,
+            location TEXT NOT NULL,
+            created_date TEXT NOT NULL,
+            updated_date TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Open',
+            created_by_user_id INTEGER NOT NULL,
+            created_by_name TEXT NOT NULL,
+            assigned_to TEXT DEFAULT NULL,
+            attachment_ref TEXT DEFAULT NULL,
+            FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -340,6 +359,85 @@ def get_user_votes(user_id: int) -> list:
     rows = cursor.fetchall()
     conn.close()
     return [r["recommendation_id"] for r in rows]
+
+
+# ─── Issue queries ─────────────────────────────────────────────────────────────
+
+def get_all_issues(category: str = None, status: str = None, search: str = None, user_id: int = None):
+    """Returns issues, optionally filtered by category, status, search string, or created_by_user_id."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM issues WHERE 1=1"
+    params = []
+
+    if category and category != "All":
+        query += " AND category = ?"
+        params.append(category)
+
+    if status and status != "All":
+        query += " AND status = ?"
+        params.append(status)
+
+    if user_id:
+        query += " AND created_by_user_id = ?"
+        params.append(user_id)
+
+    if search:
+        query += " AND (title LIKE ? OR description LIKE ? OR location LIKE ?)"
+        like = f"%{search}%"
+        params.extend([like, like, like])
+
+    query += " ORDER BY created_date DESC, id DESC"
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_issue_by_id(issue_id: int):
+    """Returns a single issue record by ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM issues WHERE id = ?", (issue_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_issue(title: str, description: str, category: str, location: str,
+                 user_id: int, user_name: str, created_date: str, attachment_ref: str = None):
+    """Inserts a new issue record into the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO issues
+           (title, description, category, location, created_date, updated_date,
+            status, created_by_user_id, created_by_name, assigned_to, attachment_ref)
+           VALUES (?, ?, ?, ?, ?, ?, 'Open', ?, ?, NULL, ?)""",
+        (title.strip(), description.strip(), category.strip(), location.strip(),
+         created_date, created_date, user_id, user_name, attachment_ref.strip() if attachment_ref else None)
+    )
+    conn.commit()
+    issue_id = cursor.lastrowid
+    cursor.execute("SELECT * FROM issues WHERE id = ?", (issue_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_issue_status_and_assignee(issue_id: int, status_val: str, assigned_to: str, updated_date: str):
+    """Updates status, assignment, and updated_date of an issue."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """UPDATE issues
+           SET status = ?, assigned_to = ?, updated_date = ?
+           WHERE id = ?""",
+        (status_val.strip(), assigned_to.strip() if assigned_to else None, updated_date, issue_id)
+    )
+    conn.commit()
+    conn.close()
+    return get_issue_by_id(issue_id)
 
 
 # Proactively initialize database tables on import

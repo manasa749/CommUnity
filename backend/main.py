@@ -15,7 +15,8 @@ from database import (
     get_user_by_email, create_user, DB_PATH,
     get_all_contacts, get_contact_by_id,
     get_all_recommendations, get_recommendation_by_id, create_recommendation,
-    upvote_recommendation, get_user_votes, has_user_voted
+    upvote_recommendation, get_user_votes, has_user_voted,
+    get_all_issues, get_issue_by_id, create_issue, update_issue_status_and_assignee
 )
 from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
 
@@ -51,6 +52,17 @@ class CreateRecommendationRequest(BaseModel):
     category: str
     description: str
     contact_info: str = ""
+
+class CreateIssueRequest(BaseModel):
+    title: str
+    description: str
+    category: str
+    location: str
+    attachment_ref: str = ""
+
+class UpdateIssueRequest(BaseModel):
+    status: str
+    assigned_to: str = ""
 
 # ─── Status ───────────────────────────────────────────────────────────────────
 
@@ -241,6 +253,103 @@ def vote_recommendation(rec_id: int, current_user: dict = Depends(get_current_us
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You have already voted for this recommendation")
 
     updated["user_has_voted"] = True
+    return updated
+
+
+# ─── Issues Endpoints ─────────────────────────────────────────────────────────
+
+@app.get("/api/issues")
+def list_issues(
+    category: str = Query(default=None),
+    status: str = Query(default=None),
+    search: str = Query(default=None),
+    only_mine: bool = Query(default=False),
+    current_user: dict = Depends(get_current_user)
+):
+    """Returns community issues with filters. Residents can filter to their own reported issues."""
+    user_id = current_user["id"]
+    filter_user_id = user_id if only_mine else None
+    return get_all_issues(category=category, status=status, search=search, user_id=filter_user_id)
+
+
+@app.get("/api/issues/{issue_id}")
+def get_issue(issue_id: int, current_user: dict = Depends(get_current_user)):
+    """Returns a single issue by ID."""
+    issue = get_issue_by_id(issue_id)
+    if not issue:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    return issue
+
+
+@app.post("/api/issues")
+def add_issue(
+    payload: CreateIssueRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Creates a new community issue reported by the current user."""
+    title = payload.title.strip()
+    description = payload.description.strip()
+    category = payload.category.strip()
+    location = payload.location.strip()
+    attachment_ref = payload.attachment_ref.strip() if payload.attachment_ref else ""
+
+    if not title or not description or not category or not location:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title, description, category, and location are required")
+
+    valid_categories = ["Water", "Lift", "Parking", "Security", "Housekeeping", "Electrical", "Other"]
+    if category not in valid_categories:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category. Choose from: {', '.join(valid_categories)}")
+
+    created_date = datetime.date.today().isoformat()
+    issue = create_issue(
+        title=title,
+        description=description,
+        category=category,
+        location=location,
+        user_id=current_user["id"],
+        user_name=current_user["name"],
+        created_date=created_date,
+        attachment_ref=attachment_ref
+    )
+
+    if not issue:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save issue")
+
+    return issue
+
+
+@app.put("/api/issues/{issue_id}")
+def update_issue(
+    issue_id: int,
+    payload: UpdateIssueRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Updates issue status and assignment. Restricted to Admins."""
+    if current_user.get("role") != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can update issue status or assignment")
+
+    issue = get_issue_by_id(issue_id)
+    if not issue:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+
+    new_status = payload.status.strip()
+    assigned_to = payload.assigned_to.strip() if payload.assigned_to else ""
+
+    valid_statuses = ["Open", "Assigned", "In Progress", "Resolved", "Closed"]
+    if new_status not in valid_statuses:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid status. Choose from: {', '.join(valid_statuses)}")
+
+    updated_date = datetime.date.today().isoformat()
+    updated = update_issue_status_and_assignee(
+        issue_id=issue_id,
+        status_val=new_status,
+        assigned_to=assigned_to,
+        updated_date=updated_date
+    )
+
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update issue")
+
     return updated
 
 

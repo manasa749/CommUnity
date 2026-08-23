@@ -7,6 +7,9 @@ const REC_CATEGORIES = [
     "Appliance Repair", "Cleaning", "Tutor", "Healthcare", "Laundry", "Other"
 ];
 
+const ISSUE_CATEGORIES = ["All", "Water", "Lift", "Parking", "Security", "Housekeeping", "Electrical", "Other"];
+const ISSUE_STATUSES = ["All", "Open", "Assigned", "In Progress", "Resolved", "Closed"];
+
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
 function apiFetch(path, token, options = {}) {
@@ -377,6 +380,330 @@ function RecommendationsPage({ token }) {
         </div>
     );
 }
+
+// ─── Report Issue Form ────────────────────────────────────────────────────────
+
+function ReportIssueForm({ token, onAdded, onCancel }) {
+    const [title, setTitle] = React.useState("");
+    const [category, setCategory] = React.useState("Water");
+    const [location, setLocation] = React.useState("");
+    const [description, setDescription] = React.useState("");
+    const [attachmentRef, setAttachmentRef] = React.useState("");
+    const [error, setError] = React.useState("");
+    const [saving, setSaving] = React.useState(false);
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        setError("");
+        if (!title.trim() || !description.trim() || !location.trim()) {
+            setError("Title, location, and description are required.");
+            return;
+        }
+        setSaving(true);
+        apiFetch("/api/issues", token, {
+            method: "POST",
+            body: JSON.stringify({
+                title,
+                category,
+                location,
+                description,
+                attachment_ref: attachmentRef
+            })
+        })
+        .then(issue => { setSaving(false); onAdded(issue); })
+        .catch(err => { setError(err.message); setSaving(false); });
+    };
+
+    return (
+        <div className="card">
+            <button className="btn-back" onClick={onCancel}>← Back to Issues</button>
+            <h2>Report a New Issue</h2>
+            <p className="info-text">Submit maintenance, utility, or security concerns to the community management.</p>
+
+            {error && <div className="error-panel">{error}</div>}
+
+            <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                    <label>Issue Title</label>
+                    <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Lift not working in Block B" />
+                </div>
+                <div className="form-group">
+                    <label>Category</label>
+                    <select value={category} onChange={e => setCategory(e.target.value)} className="form-select">
+                        {ISSUE_CATEGORIES.filter(c => c !== "All").map(c => (
+                            <option key={c} value={c}>{c}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>Location / Block</label>
+                    <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Block B, 3rd Floor" />
+                </div>
+                <div className="form-group">
+                    <label>Description</label>
+                    <textarea
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        placeholder="Provide details about the issue..."
+                        rows="4"
+                        className="form-textarea"
+                    />
+                </div>
+                <div className="form-group">
+                    <label>Optional Attachment Link</label>
+                    <input type="text" value={attachmentRef} onChange={e => setAttachmentRef(e.target.value)} placeholder="e.g. Image URL or document link" />
+                </div>
+                <button type="submit" className="btn-primary" disabled={saving}>
+                    {saving ? "Submitting..." : "Report Issue"}
+                </button>
+            </form>
+        </div>
+    );
+}
+
+// ─── Issues Page ──────────────────────────────────────────────────────────────
+
+function IssuesPage({ token, userRole }) {
+    const [view, setView] = React.useState("list"); // "list" | "add" | "detail"
+    const [issues, setIssues] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState("");
+    const [search, setSearch] = React.useState("");
+    const [category, setCategory] = React.useState("All");
+    const [statusFilter, setStatusFilter] = React.useState("All");
+    const [onlyMine, setOnlyMine] = React.useState(false);
+    const [selected, setSelected] = React.useState(null);
+    const [adminUpdateError, setAdminUpdateError] = React.useState("");
+    
+    // Admin update state fields
+    const [adminStatus, setAdminStatus] = React.useState("Open");
+    const [adminAssignee, setAdminAssignee] = React.useState("");
+    const [updating, setUpdating] = React.useState(false);
+
+    const fetchIssues = (cat, stat, q, mine) => {
+        setLoading(true);
+        setError("");
+        const params = new URLSearchParams();
+        if (cat && cat !== "All") params.append("category", cat);
+        if (stat && stat !== "All") params.append("status", stat);
+        if (q && q.trim()) params.append("search", q.trim());
+        if (mine) params.append("only_mine", "true");
+        
+        apiFetch(`/api/issues?${params.toString()}`, token)
+            .then(data => { setIssues(data); setLoading(false); })
+            .catch(err => { setError(err.message); setLoading(false); });
+    };
+
+    React.useEffect(() => {
+        fetchIssues("All", "All", "", false);
+    }, []);
+
+    const handleSearch = (e) => {
+        e.preventDefault();
+        fetchIssues(category, statusFilter, search, onlyMine);
+    };
+
+    const handleCategoryChange = (e) => {
+        const cat = e.target.value;
+        setCategory(cat);
+        fetchIssues(cat, statusFilter, search, onlyMine);
+    };
+
+    const handleStatusFilterChange = (e) => {
+        const stat = e.target.value;
+        setStatusFilter(stat);
+        fetchIssues(category, stat, search, onlyMine);
+    };
+
+    const handleOnlyMineChange = (e) => {
+        const mine = e.target.checked;
+        setOnlyMine(mine);
+        fetchIssues(category, statusFilter, search, mine);
+    };
+
+    const handleOpenDetail = (issue) => {
+        setSelected(issue);
+        setAdminStatus(issue.status);
+        setAdminAssignee(issue.assigned_to || "");
+        setAdminUpdateError("");
+        setView("detail");
+    };
+
+    const handleAdminUpdate = (e) => {
+        e.preventDefault();
+        setAdminUpdateError("");
+        setUpdating(true);
+        apiFetch(`/api/issues/${selected.id}`, token, {
+            method: "PUT",
+            body: JSON.stringify({
+                status: adminStatus,
+                assigned_to: adminAssignee
+            })
+        })
+        .then(updatedIssue => {
+            setUpdating(false);
+            setSelected(updatedIssue);
+            setIssues(prev => prev.map(i => i.id === updatedIssue.id ? updatedIssue : i));
+        })
+        .catch(err => {
+            setAdminUpdateError(err.message);
+            setUpdating(false);
+        });
+    };
+
+    if (view === "add") {
+        return <ReportIssueForm token={token} onAdded={() => { setView("list"); fetchIssues(category, statusFilter, search, onlyMine); }} onCancel={() => setView("list")} />;
+    }
+
+    if (view === "detail" && selected) {
+        return (
+            <div className="card">
+                <button className="btn-back" onClick={() => { setView("list"); setSelected(null); }}>← Back to Issues</button>
+                <div className="rec-detail-header">
+                    <div>
+                        <h2>{selected.title}</h2>
+                        <div className="badge-row" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.375rem' }}>
+                            <span className={`category-badge cat-${selected.category.toLowerCase()}`}>{selected.category}</span>
+                            <span className={`status-badge status-${selected.status.toLowerCase().replace(" ", "-")}`}>{selected.status}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="detail-grid">
+                    <div className="detail-row detail-description">
+                        <strong>Description</strong>
+                        <span>{selected.description}</span>
+                    </div>
+                    <div className="detail-row"><strong>Location / Block</strong><span>{selected.location}</span></div>
+                    <div className="detail-row"><strong>Reported By</strong><span>{selected.created_by_name}</span></div>
+                    <div className="detail-row"><strong>Reported Date</strong><span>{selected.created_date}</span></div>
+                    <div className="detail-row"><strong>Last Updated</strong><span>{selected.updated_date}</span></div>
+                    <div className="detail-row"><strong>Assigned To</strong><span>{selected.assigned_to || "Unassigned"}</span></div>
+                    {selected.attachment_ref && (
+                        <div className="detail-row">
+                            <strong>Attachment Reference</strong>
+                            <span>
+                                <a href={selected.attachment_ref} target="_blank" rel="noopener noreferrer" className="attachment-link">
+                                    View Attachment
+                                </a>
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                {userRole === "Admin" && (
+                    <div className="admin-controls-panel" style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
+                        <h3>Admin Status & Assignment Controls</h3>
+                        {adminUpdateError && <div className="error-panel">{adminUpdateError}</div>}
+                        <form onSubmit={handleAdminUpdate} style={{ marginTop: '0.75rem' }}>
+                            <div className="form-group">
+                                <label>Status</label>
+                                <select value={adminStatus} onChange={e => setAdminStatus(e.target.value)} className="form-select">
+                                    {ISSUE_STATUSES.filter(s => s !== "All").map(s => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Assigned To</label>
+                                <input
+                                    type="text"
+                                    value={adminAssignee}
+                                    onChange={e => setAdminAssignee(e.target.value)}
+                                    placeholder="Assign to staff / department"
+                                />
+                            </div>
+                            <button type="submit" className="btn-primary" disabled={updating}>
+                                {updating ? "Saving Changes..." : "Update Issue Status / Assignment"}
+                            </button>
+                        </form>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="card">
+            <div className="section-header">
+                <h2>Community Issues</h2>
+                <button className="btn-primary btn-sm" onClick={() => setView("add")}>+ Report Issue</button>
+            </div>
+            <p className="info-text">Report and track maintenance, security, or utility issues in the community.</p>
+
+            <div className="controls-row">
+                <form onSubmit={handleSearch} className="search-bar-compact">
+                    <input
+                        type="text"
+                        placeholder="Search issues..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                    <button type="submit" className="btn-primary btn-sm">Search</button>
+                </form>
+                <div className="filter-sort-controls">
+                    <select value={category} onChange={handleCategoryChange} className="control-select">
+                        {ISSUE_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat === "All" ? "All Categories" : cat}</option>
+                        ))}
+                    </select>
+                    <select value={statusFilter} onChange={handleStatusFilterChange} className="control-select">
+                        {ISSUE_STATUSES.map(stat => (
+                            <option key={stat} value={stat}>{stat === "All" ? "All Statuses" : stat}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            {userRole !== "Admin" && (
+                <div className="form-group-checkbox" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input
+                        type="checkbox"
+                        id="onlyMineCheck"
+                        checked={onlyMine}
+                        onChange={handleOnlyMineChange}
+                        style={{ width: 'auto', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="onlyMineCheck" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', cursor: 'pointer', userSelect: 'none' }}>
+                        Show only issues reported by me
+                    </label>
+                </div>
+            )}
+
+            {loading && <p className="loading-text">Loading issues...</p>}
+            {error   && <div className="error-panel">{error}</div>}
+
+            {!loading && !error && issues.length === 0 && (
+                <div className="empty-state">No issues found. Everything is running smoothly!</div>
+            )}
+
+            {!loading && issues.length > 0 && (
+                <div className="list">
+                    {issues.map(i => (
+                        <div key={i.id} className="list-item compact-rec-card" onClick={() => handleOpenDetail(i)}>
+                            <div className="list-item-main">
+                                <div className="rec-card-header">
+                                    <span className="list-item-title">{i.title}</span>
+                                    <span className={`category-badge cat-${i.category.toLowerCase()}`}>{i.category}</span>
+                                    <span className={`status-badge status-${i.status.toLowerCase().replace(" ", "-")}`} style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' }}>{i.status}</span>
+                                </div>
+                                <span className="list-item-sub compact-desc">
+                                    {i.description.length > 85 ? i.description.slice(0, 85) + "…" : i.description}
+                                </span>
+                                <div className="rec-card-footer" style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                                    <span>📍 {i.location}</span>
+                                    <span>by {i.created_by_name}</span>
+                                    <span>{i.created_date}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── App Root ─────────────────────────────────────────────────────────────────
 
 function App() {
@@ -552,13 +879,7 @@ function App() {
             case "recommendations":
                 return <RecommendationsPage token={token} />;
             case "issues":
-                return (
-                    <div className="card">
-                        <h2>Community Issues</h2>
-                        <p className="info-text">Report and track maintenance, security, or utility issues in the community transparently.</p>
-                        <div className="skeleton-item">Issue tracker — coming soon.</div>
-                    </div>
-                );
+                return <IssuesPage token={token} userRole={user.role} />;
             case "profile":
                 return (
                     <div className="card">
