@@ -15,8 +15,10 @@ from database import (
     get_user_by_email, create_user, DB_PATH,
     get_all_contacts, get_contact_by_id,
     get_all_recommendations, get_recommendation_by_id, create_recommendation,
-    upvote_recommendation, get_user_votes, has_user_voted,
-    get_all_issues, get_issue_by_id, create_issue, update_issue_status_and_assignee
+    upvote_recommendation, toggle_vote_recommendation, get_user_votes, has_user_voted,
+    update_recommendation_details, delete_recommendation_by_id,
+    get_all_issues, get_issue_by_id, create_issue, update_issue_status_and_assignee,
+    get_all_announcements, get_announcement_by_id, create_announcement, update_announcement
 )
 from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
 
@@ -63,6 +65,25 @@ class CreateIssueRequest(BaseModel):
 class UpdateIssueRequest(BaseModel):
     status: str
     assigned_to: str = ""
+    admin_note: str = ""
+
+class UpdateRecommendationRequest(BaseModel):
+    service_name: str
+    category: str
+    description: str
+    contact_info: str = ""
+
+class CreateAnnouncementRequest(BaseModel):
+    title: str
+    content: str
+    category: str = "General"
+    status: str = "published"
+
+class UpdateAnnouncementRequest(BaseModel):
+    title: str
+    content: str
+    category: str = "General"
+    status: str = "published"
 
 # ─── Status ───────────────────────────────────────────────────────────────────
 
@@ -241,19 +262,76 @@ def add_recommendation(
 
 @app.post("/api/recommendations/{rec_id}/vote")
 def vote_recommendation(rec_id: int, current_user: dict = Depends(get_current_user)):
-    """Casts an upvote from the authenticated resident. Each resident can vote once per recommendation."""
+    """Toggles an upvote from the authenticated resident for a recommendation.
+    Adds the vote if the user has not voted yet; removes it if they have already voted.
+    Each resident can have at most one active vote per recommendation."""
     rec = get_recommendation_by_id(rec_id)
     if not rec:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
 
     voted_date = datetime.date.today().isoformat()
-    updated = upvote_recommendation(rec_id=rec_id, user_id=current_user["id"], voted_date=voted_date)
+    updated = toggle_vote_recommendation(rec_id=rec_id, user_id=current_user["id"], voted_date=voted_date)
 
     if updated is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You have already voted for this recommendation")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update vote")
 
-    updated["user_has_voted"] = True
+    updated["user_has_voted"] = has_user_voted(rec_id, current_user["id"])
     return updated
+
+
+@app.put("/api/recommendations/{rec_id}")
+def edit_recommendation(
+    rec_id: int,
+    payload: UpdateRecommendationRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Updates a recommendation. Only the creator or an Admin may edit."""
+    rec = get_recommendation_by_id(rec_id)
+    if not rec:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
+
+    if rec["created_by_user_id"] != current_user["id"] and current_user.get("role") != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to edit this recommendation")
+
+    service_name = payload.service_name.strip()
+    category = payload.category.strip()
+    description = payload.description.strip()
+    contact_info = payload.contact_info.strip() if payload.contact_info else ""
+
+    if not service_name or not category or not description:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Service name, category, and description are required")
+
+    valid_categories = ["Broadband", "Plumber", "Electrician", "AC Service", "Appliance Repair",
+                        "Cleaning", "Tutor", "Healthcare", "Laundry", "Other"]
+    if category not in valid_categories:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category")
+
+    updated = update_recommendation_details(rec_id, service_name, category, description, contact_info)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update recommendation")
+
+    updated["user_has_voted"] = has_user_voted(rec_id, current_user["id"])
+    return updated
+
+
+@app.delete("/api/recommendations/{rec_id}")
+def remove_recommendation(
+    rec_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Deletes a recommendation. Only the creator or an Admin may delete."""
+    rec = get_recommendation_by_id(rec_id)
+    if not rec:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
+
+    if rec["created_by_user_id"] != current_user["id"] and current_user.get("role") != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to delete this recommendation")
+
+    success = delete_recommendation_by_id(rec_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete recommendation")
+
+    return {"message": "Recommendation deleted successfully"}
 
 
 # ─── Issues Endpoints ─────────────────────────────────────────────────────────
@@ -324,7 +402,7 @@ def update_issue(
     payload: UpdateIssueRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Updates issue status and assignment. Restricted to Admins."""
+    """Updates issue status, assignment, and admin note. Restricted to Admins."""
     if current_user.get("role") != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can update issue status or assignment")
 
@@ -334,6 +412,7 @@ def update_issue(
 
     new_status = payload.status.strip()
     assigned_to = payload.assigned_to.strip() if payload.assigned_to else ""
+    admin_note = payload.admin_note.strip() if payload.admin_note else ""
 
     valid_statuses = ["Open", "Assigned", "In Progress", "Resolved", "Closed"]
     if new_status not in valid_statuses:
@@ -344,12 +423,94 @@ def update_issue(
         issue_id=issue_id,
         status_val=new_status,
         assigned_to=assigned_to,
-        updated_date=updated_date
+        updated_date=updated_date,
+        admin_note=admin_note
     )
 
     if not updated:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update issue")
 
+    return updated
+
+
+# ─── Announcements Endpoints ───────────────────────────────────────────────────
+
+@app.get("/api/announcements")
+def list_announcements(current_user: dict = Depends(get_current_user)):
+    """Returns all announcements. Admins see all statuses; residents see published only."""
+    if current_user.get("role") == "Admin":
+        return get_all_announcements()
+    return get_all_announcements(status_filter="published")
+
+
+@app.get("/api/announcements/{ann_id}")
+def get_one_announcement(ann_id: int, current_user: dict = Depends(get_current_user)):
+    """Returns a single announcement by ID. Non-admins may only view published ones."""
+    ann = get_announcement_by_id(ann_id)
+    if not ann:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found")
+    if current_user.get("role") != "Admin" and ann["status"] != "published":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found")
+    return ann
+
+
+@app.post("/api/announcements")
+def add_announcement(
+    payload: CreateAnnouncementRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Creates a new announcement. Restricted to Admins."""
+    if current_user.get("role") != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can create announcements")
+
+    title = payload.title.strip()
+    content = payload.content.strip()
+    category = payload.category.strip() if payload.category else "General"
+    ann_status = payload.status if payload.status in ("published", "archived") else "published"
+
+    if not title or not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title and content are required")
+
+    valid_categories = ["General", "Maintenance", "Security", "Water", "Other"]
+    if category not in valid_categories:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category")
+
+    published_date = datetime.date.today().isoformat()
+    ann = create_announcement(
+        title=title, content=content, category=category,
+        user_id=current_user["id"], user_name=current_user["name"],
+        published_date=published_date, status=ann_status
+    )
+    if not ann:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create announcement")
+    return ann
+
+
+@app.put("/api/announcements/{ann_id}")
+def edit_announcement(
+    ann_id: int,
+    payload: UpdateAnnouncementRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Updates an announcement. Restricted to Admins."""
+    if current_user.get("role") != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can edit announcements")
+
+    ann = get_announcement_by_id(ann_id)
+    if not ann:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found")
+
+    title = payload.title.strip()
+    content = payload.content.strip()
+    category = payload.category.strip() if payload.category else "General"
+    ann_status = payload.status if payload.status in ("published", "archived") else "published"
+
+    if not title or not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title and content are required")
+
+    updated = update_announcement(ann_id, title, content, category, ann_status)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update announcement")
     return updated
 
 

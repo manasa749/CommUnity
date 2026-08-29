@@ -90,7 +90,29 @@ def init_db():
             created_by_name TEXT NOT NULL,
             assigned_to TEXT DEFAULT NULL,
             attachment_ref TEXT DEFAULT NULL,
+            admin_note TEXT DEFAULT NULL,
             FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+        )
+    """)
+
+    # Migrate: add admin_note to existing issues tables that predate this column
+    try:
+        cursor.execute("ALTER TABLE issues ADD COLUMN admin_note TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    # Announcements table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS announcements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'General',
+            published_by_user_id INTEGER NOT NULL,
+            published_by_name TEXT NOT NULL,
+            published_date TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'published',
+            FOREIGN KEY (published_by_user_id) REFERENCES users(id)
         )
     """)
 
@@ -321,6 +343,45 @@ def has_user_voted(rec_id: int, user_id: int) -> bool:
     return row is not None
 
 
+def toggle_vote_recommendation(rec_id: int, user_id: int, voted_date: str):
+    """
+    Toggles a vote: adds the vote if the user has not voted yet, or removes it
+    if the user has already voted. Returns the updated recommendation dict.
+    Always returns the updated recommendation (never None on a valid rec_id).
+    """
+    already_voted = has_user_voted(rec_id, user_id)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if already_voted:
+            # Remove the vote
+            cursor.execute(
+                "DELETE FROM recommendation_votes WHERE recommendation_id = ? AND user_id = ?",
+                (rec_id, user_id)
+            )
+            # Decrement, but never go below 0
+            cursor.execute(
+                "UPDATE recommendations SET vote_count = MAX(0, vote_count - 1) WHERE id = ?",
+                (rec_id,)
+            )
+        else:
+            # Add the vote
+            cursor.execute(
+                "INSERT INTO recommendation_votes (recommendation_id, user_id, voted_date) VALUES (?,?,?)",
+                (rec_id, user_id, voted_date)
+            )
+            cursor.execute(
+                "UPDATE recommendations SET vote_count = vote_count + 1 WHERE id = ?",
+                (rec_id,)
+            )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return get_recommendation_by_id(rec_id)
+    conn.close()
+    return get_recommendation_by_id(rec_id)
+
+
 def upvote_recommendation(rec_id: int, user_id: int, voted_date: str):
     """
     Casts one vote from user_id for rec_id.
@@ -425,19 +486,118 @@ def create_issue(title: str, description: str, category: str, location: str,
     return dict(row) if row else None
 
 
-def update_issue_status_and_assignee(issue_id: int, status_val: str, assigned_to: str, updated_date: str):
-    """Updates status, assignment, and updated_date of an issue."""
+def update_issue_status_and_assignee(issue_id: int, status_val: str, assigned_to: str,
+                                      updated_date: str, admin_note: str = ""):
+    """Updates status, assignment, admin note, and updated_date of an issue."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
         """UPDATE issues
-           SET status = ?, assigned_to = ?, updated_date = ?
+           SET status = ?, assigned_to = ?, updated_date = ?, admin_note = ?
            WHERE id = ?""",
-        (status_val.strip(), assigned_to.strip() if assigned_to else None, updated_date, issue_id)
+        (status_val.strip(),
+         assigned_to.strip() if assigned_to else None,
+         updated_date,
+         admin_note.strip() if admin_note else None,
+         issue_id)
     )
     conn.commit()
     conn.close()
     return get_issue_by_id(issue_id)
+
+
+# ─── Recommendation edit / delete ────────────────────────────────────────────
+
+def update_recommendation_details(rec_id: int, service_name: str, category: str,
+                                  description: str, contact_info: str):
+    """Updates mutable fields of a recommendation. Returns updated record."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """UPDATE recommendations
+           SET service_name = ?, category = ?, description = ?, contact_info = ?
+           WHERE id = ?""",
+        (service_name.strip(), category.strip(), description.strip(),
+         contact_info.strip() if contact_info else None, rec_id)
+    )
+    conn.commit()
+    conn.close()
+    return get_recommendation_by_id(rec_id)
+
+
+def delete_recommendation_by_id(rec_id: int) -> bool:
+    """Deletes a recommendation and its associated votes. Returns True on success."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM recommendation_votes WHERE recommendation_id = ?", (rec_id,))
+    cursor.execute("DELETE FROM recommendations WHERE id = ?", (rec_id,))
+    conn.commit()
+    rows_deleted = cursor.rowcount
+    conn.close()
+    return rows_deleted > 0
+
+
+# ─── Announcement queries ──────────────────────────────────────────────────────
+
+def get_all_announcements(status_filter: str = None):
+    """Returns announcements ordered by date descending. Optionally filtered by status."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM announcements WHERE 1=1"
+    params = []
+    if status_filter:
+        query += " AND status = ?"
+        params.append(status_filter)
+    query += " ORDER BY published_date DESC, id DESC"
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_announcement_by_id(ann_id: int):
+    """Returns a single announcement by id."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM announcements WHERE id = ?", (ann_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_announcement(title: str, content: str, category: str,
+                        user_id: int, user_name: str,
+                        published_date: str, status: str = "published"):
+    """Inserts a new announcement created by an Admin."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO announcements
+           (title, content, category, published_by_user_id, published_by_name, published_date, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (title.strip(), content.strip(), category.strip(),
+         user_id, user_name, published_date, status)
+    )
+    conn.commit()
+    ann_id = cursor.lastrowid
+    conn.close()
+    return get_announcement_by_id(ann_id)
+
+
+def update_announcement(ann_id: int, title: str, content: str,
+                        category: str, status: str):
+    """Updates an announcement's content and/or status."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """UPDATE announcements
+           SET title = ?, content = ?, category = ?, status = ?
+           WHERE id = ?""",
+        (title.strip(), content.strip(), category.strip(), status, ann_id)
+    )
+    conn.commit()
+    conn.close()
+    return get_announcement_by_id(ann_id)
 
 
 # Proactively initialize database tables on import

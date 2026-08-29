@@ -841,7 +841,7 @@ body {
     border-color: var(--primary-color);
     background-color: var(--primary-light);
     color: var(--primary-color);
-    cursor: default;
+    cursor: pointer;
 }
 
 /* Issue Status & Category Badge Styles */
@@ -893,4 +893,92 @@ body {
     color: #1d4ed8;
 }
 
+/* Issue list meta row */
+.issue-list-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+}
 
+/* Detail action buttons row */
+.detail-actions {
+    margin-top: 1.25rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+/* Danger outline button */
+.btn-danger-outline {
+    background: none;
+    border: 1px solid #ef4444;
+    color: #ef4444;
+    border-radius: 0.375rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: background 0.15s ease;
+}
+.btn-danger-outline:hover {
+    background-color: #fef2f2;
+}
+
+/* Archived label */
+.archived-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-style: italic;
+    font-weight: 500;
+    background: var(--border-color);
+    padding: 0.1rem 0.45rem;
+    border-radius: 9999px;
+}
+
+/* Dashboard announcements widget */
+.dashboard-widget {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.dashboard-widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.dashboard-widget-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+/* Announcement widget card item */
+.announcement-widget-item {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--card-background);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.announcement-widget-item:hover {
+    border-color: var(--primary-color);
+    background: var(--primary-light);
+}
+
+/* Announcement category badge colors */
+.cat-ann-general     { background-color: #e0e7ff; color: #3730a3; }
+.cat-ann-maintenance { background-color: #fef3c7; color: #92400e; }
+.cat-ann-security    { background-color: #fee2e2; color: #991b1b; }
+.cat-ann-water       { background-color: #e0f2fe; color: #0369a1; }
+.cat-ann-other       { background-color: #f1f5f9; color: #475569; }
