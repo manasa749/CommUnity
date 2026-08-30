@@ -1,63 +1,195 @@
 import os
+import queue
+import threading
 from dotenv import load_dotenv
-import psycopg2
-import psycopg2.pool
-import psycopg2.extras
-import psycopg2.errors
+import pg8000.dbapi
+from google.cloud.sql.connector import Connector
 
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Connection pool
+# Cloud SQL Python Connector — connection pool
 # ---------------------------------------------------------------------------
-# DATABASE_URL must be a libpq connection string or DSN, e.g.:
-#   postgresql://user:password@host:5432/dbname
-# For Google Cloud SQL (public IP) the format is the same.
-# For Cloud SQL with Unix socket, use:
-#   postgresql://user:password@/dbname?host=/cloudsql/project:region:instance
-_DATABASE_URL = os.environ.get("DATABASE_URL")
-if not _DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL environment variable is not set. "
-        "Set it to a PostgreSQL connection string, e.g.: "
-        "postgresql://user:password@localhost:5432/community"
+# Required environment variables:
+#   INSTANCE_CONNECTION_NAME  e.g. my-project:us-central1:my-instance
+#   DB_NAME                   e.g. community
+#   DB_USER                   e.g. community_user
+#   DB_PASSWORD               the database user's password
+#
+# Authentication uses Application Default Credentials (ADC):
+#   - Locally:  run  gcloud auth application-default login
+#   - Cloud Run / GCE: the attached service account is used automatically.
+#
+# The connector opens an encrypted mTLS tunnel to Cloud SQL, so no public
+# IP address, host, port, or DATABASE_URL is needed here.
+# ---------------------------------------------------------------------------
+
+_INSTANCE_CONNECTION_NAME = os.environ.get("INSTANCE_CONNECTION_NAME")
+_DB_NAME     = os.environ.get("DB_NAME")
+_DB_USER     = os.environ.get("DB_USER")
+_DB_PASSWORD = os.environ.get("DB_PASSWORD")
+
+for _var, _val in [
+    ("INSTANCE_CONNECTION_NAME", _INSTANCE_CONNECTION_NAME),
+    ("DB_NAME",                  _DB_NAME),
+    ("DB_USER",                  _DB_USER),
+    ("DB_PASSWORD",              _DB_PASSWORD),
+]:
+    if not _val:
+        raise RuntimeError(
+            f"Required environment variable '{_var}' is not set. "
+            "Check your .env file or deployment configuration."
+        )
+
+# Module-level Connector instance — reused for the lifetime of the process.
+_connector = Connector()
+
+
+def _get_pg_connection():
+    """
+    Factory used by the queue pool below.
+    Opens a pg8000 connection via the Cloud SQL Connector mTLS tunnel.
+    pg8000 is a supported driver for the Cloud SQL Python Connector;
+    psycopg2 is not.
+    """
+    return _connector.connect(
+        _INSTANCE_CONNECTION_NAME,
+        "pg8000",
+        user=_DB_USER,
+        password=_DB_PASSWORD,
+        db=_DB_NAME,
     )
 
-_pool: psycopg2.pool.ThreadedConnectionPool | None = None
+
+# ---------------------------------------------------------------------------
+# Thread-safe connection pool backed by queue.Queue.
+#
+# psycopg2.pool.ThreadedConnectionPool treats `connection_factory` as a
+# psycopg2 *connection subclass* and always passes a DSN string as the first
+# positional argument when constructing connections.  That breaks the Cloud SQL
+# Connector factory, which takes zero arguments.  A queue.Queue pool calls the
+# factory correctly and is equally thread-safe.
+# ---------------------------------------------------------------------------
+
+_POOL_MAXCONN = 10
+_pool_queue: queue.Queue = queue.Queue(maxsize=_POOL_MAXCONN)
+_pool_lock = threading.Lock()
+_pool_size = 0  # tracks how many connections have been created
 
 
-def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
-    """Returns the shared connection pool, initialising it on first call."""
-    global _pool
-    if _pool is None:
-        _pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=1,
-            maxconn=10,
-            dsn=_DATABASE_URL,
-        )
-    return _pool
+def _get_pool_conn():
+    """
+    Returns a connection from the pool.  Creates a new one (up to MAXCONN)
+    if the queue is empty; otherwise blocks until one is returned.
+    """
+    global _pool_size
+    try:
+        # Non-blocking: reuse an idle connection immediately.
+        return _pool_queue.get_nowait()
+    except queue.Empty:
+        pass
+
+    with _pool_lock:
+        if _pool_size < _POOL_MAXCONN:
+            conn = _get_pg_connection()
+            _pool_size += 1
+            return conn
+
+    # Pool is full — wait for an idle connection (up to 30 s).
+    return _pool_queue.get(timeout=30)
+
+
+def _return_pool_conn(conn):
+    """Returns a connection to the pool, closing it if it is no longer usable."""
+    global _pool_size
+    try:
+        # pg8000 has no .closed attribute; probe with rollback instead.
+        conn.rollback()          # discard any uncommitted state
+        _pool_queue.put_nowait(conn)
+    except Exception:
+        # Connection is broken; discard it and allow a fresh one to be made.
+        with _pool_lock:
+            _pool_size = max(0, _pool_size - 1)
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def get_db_connection():
     """
-    Borrows a connection from the pool and attaches a .pool reference so
-    callers can call conn.pool.putconn(conn) to return it.
-    A RealDictCursor is used so row data is accessible as dictionaries,
-    preserving the existing dict(row) call pattern throughout the codebase.
+    Borrows a connection from the pool and attaches a ._return reference so
+    callers can return it via conn._return(conn).
+    The existing _close() helper calls conn.pool.putconn(conn); a thin shim on
+    the returned connection preserves that interface.
     """
-    pool = _get_pool()
-    conn = pool.getconn()
-    conn.pool = pool  # stash reference for return-to-pool calls
+    conn = _get_pool_conn()
+    # Provide a .pool shim with a putconn() method so _close() works unchanged.
+    class _PoolShim:
+        @staticmethod
+        def putconn(c):
+            _return_pool_conn(c)
+    conn.pool = _PoolShim()
     return conn
 
 
+class _DictCursor:
+    """
+    Wraps a pg8000 cursor so that fetched rows behave like dicts, preserving
+    the existing ``row["column_name"]`` access pattern throughout the codebase.
+    pg8000 returns plain tuples; this wrapper zips column names from
+    cursor.description onto each row after every execute/executemany call.
+    """
+
+    def __init__(self, raw_cursor):
+        self._cur = raw_cursor
+
+    # ---- passthrough attributes the rest of the code uses ----
+    @property
+    def rowcount(self):
+        return self._cur.rowcount
+
+    @property
+    def description(self):
+        return self._cur.description
+
+    # ---- execution methods ----
+    def execute(self, query, params=()):
+        """
+        Delegates to the pg8000 cursor.  pg8000.execute() tests len(args),
+        so we must never pass None — use an empty tuple for no-parameter queries.
+        """
+        if params is None:
+            params = ()
+        self._cur.execute(query, params)
+
+    def executemany(self, query, seq):
+        self._cur.executemany(query, seq)
+
+    # ---- fetch methods — return dicts ----
+    def _row_to_dict(self, row):
+        if row is None:
+            return None
+        cols = [d[0] for d in self._cur.description]
+        return dict(zip(cols, row))
+
+    def fetchone(self):
+        return self._row_to_dict(self._cur.fetchone())
+
+    def fetchall(self):
+        if self._cur.description is None:
+            return []
+        cols = [d[0] for d in self._cur.description]
+        return [dict(zip(cols, row)) for row in self._cur.fetchall()]
+
+
 def _cursor(conn):
-    """Returns a RealDictCursor for the given connection."""
-    return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    """Returns a dict-row cursor for the given pg8000 connection."""
+    return _DictCursor(conn.cursor())
 
 
 def _close(conn):
-    """Returns the connection to the pool (equivalent to conn.close() for sqlite3)."""
+    """Returns the connection to the pool."""
     try:
         conn.pool.putconn(conn)
     except Exception:
@@ -150,11 +282,18 @@ def init_db():
     """)
 
     # Add admin_note column to any pre-existing issues table that lacks it.
-    # PostgreSQL raises duplicate_column (42701) when the column already exists.
+    # PostgreSQL raises sqlstate 42701 (duplicate_column) when it already exists.
     try:
         cursor.execute("ALTER TABLE issues ADD COLUMN admin_note TEXT DEFAULT NULL")
-    except psycopg2.errors.DuplicateColumn:
-        conn.rollback()   # clear the error state before continuing
+        conn.commit()
+    except pg8000.dbapi.DatabaseError as exc:
+        # pg8000 surfaces the sqlstate in exc.args as a dict with key 'C'.
+        sqlstate = (exc.args[0] or {}).get("C", "") if exc.args else ""
+        if sqlstate == "42701":   # duplicate_column — column already exists, safe to ignore
+            conn.rollback()       # clear the error state before continuing
+        else:
+            conn.rollback()
+            raise
 
     # Announcements table
     cursor.execute("""
@@ -294,7 +433,10 @@ def create_user(name: str, email: str, flat_number: str, hashed_password: str, r
         cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
-    except psycopg2.errors.UniqueViolation:
+    except pg8000.dbapi.DatabaseError as exc:
+        sqlstate = (exc.args[0] or {}).get("C", "") if exc.args else ""
+        if sqlstate != "23505":   # 23505 = unique_violation
+            raise
         conn.rollback()
         return None
     finally:
@@ -438,7 +580,10 @@ def toggle_vote_recommendation(rec_id: int, user_id: int, voted_date: str):
                 (rec_id,)
             )
         conn.commit()
-    except psycopg2.errors.UniqueViolation:
+    except pg8000.dbapi.DatabaseError as exc:
+        sqlstate = (exc.args[0] or {}).get("C", "") if exc.args else ""
+        if sqlstate != "23505":   # 23505 = unique_violation
+            raise
         conn.rollback()
         _close(conn)
         return get_recommendation_by_id(rec_id)
@@ -466,7 +611,10 @@ def upvote_recommendation(rec_id: int, user_id: int, voted_date: str):
             (rec_id,)
         )
         conn.commit()
-    except psycopg2.errors.UniqueViolation:
+    except pg8000.dbapi.DatabaseError as exc:
+        sqlstate = (exc.args[0] or {}).get("C", "") if exc.args else ""
+        if sqlstate != "23505":   # 23505 = unique_violation
+            raise
         conn.rollback()
         _close(conn)
         return None

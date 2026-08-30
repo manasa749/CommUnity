@@ -12,7 +12,7 @@ load_dotenv()
 
 # Import database and authentication helper functions
 from database import (
-    get_user_by_email, create_user, DB_PATH,
+    get_user_by_email, create_user,
     get_all_contacts, get_contact_by_id,
     get_all_recommendations, get_recommendation_by_id, create_recommendation,
     upvote_recommendation, toggle_vote_recommendation, get_user_votes, has_user_voted,
@@ -93,7 +93,7 @@ def get_status():
         "status": "connected",
         "message": "Hello from the CommUnity FastAPI Backend!",
         "version": "0.3.0",
-        "database_file": DB_PATH
+        "database": "Cloud SQL PostgreSQL (pg8000)"
     }
 
 # ─── Auth Endpoints ───────────────────────────────────────────────────────────
