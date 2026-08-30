@@ -21,6 +21,7 @@ from database import (
     get_all_announcements, get_announcement_by_id, create_announcement, update_announcement
 )
 from auth_utils import hash_password, verify_password, create_access_token, decode_access_token
+from agent_routes import router as agent_router
 
 app = FastAPI(title="CommUnity API")
 
@@ -32,6 +33,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount agent router
+app.include_router(agent_router)
 
 # Email verification regex (simple, standard format validation)
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")

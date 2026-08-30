@@ -6,3 +6,4 @@ python-dotenv>=1.0.0
 pg8000>=1.31.0
 cloud-sql-python-connector>=1.9.0
 google-auth>=2.29.0
+google-adk>=1.0.0
