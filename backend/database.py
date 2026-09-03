@@ -477,6 +477,41 @@ def get_contact_by_id(contact_id: int):
     _close(conn)
     return dict(row) if row else None
 
+def create_contact(name: str, designation: str, category: str, phone: str = "", email: str = "", availability: str = ""):
+    """Creates a community contact. Intended for Admin use."""
+    conn = get_db_connection()
+    cursor = _cursor(conn)
+    cursor.execute(
+        """INSERT INTO contacts (name, designation, category, phone, email, availability, is_seed)
+           VALUES (%s, %s, %s, %s, %s, %s, 0) RETURNING id""",
+        (name.strip(), designation.strip(), category.strip(),
+         phone.strip() if phone else None, email.strip() if email else None,
+         availability.strip() if availability else None)
+    )
+    contact_id = cursor.fetchone()["id"]
+    conn.commit()
+    _close(conn)
+    return get_contact_by_id(contact_id)
+
+
+def update_contact(contact_id: int, name: str, designation: str, category: str,
+                   phone: str = "", email: str = "", availability: str = ""):
+    """Updates a community contact. Intended for Admin use."""
+    conn = get_db_connection()
+    cursor = _cursor(conn)
+    cursor.execute(
+        """UPDATE contacts
+           SET name = %s, designation = %s, category = %s, phone = %s, email = %s, availability = %s
+           WHERE id = %s""",
+        (name.strip(), designation.strip(), category.strip(),
+         phone.strip() if phone else None, email.strip() if email else None,
+         availability.strip() if availability else None, contact_id)
+    )
+    changed = cursor.rowcount
+    conn.commit()
+    _close(conn)
+    return get_contact_by_id(contact_id) if changed else None
+
 
 # \u2500\u2500\u2500 Recommendation queries \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 

@@ -901,12 +901,63 @@ function AnnouncementsWidget({ token, onNavigate }) {
 
 // ─── App Root ─────────────────────────────────────────────────────────────────
 
+function CommUnityAgent({ token, user, onClose }) {
+    const [messages, setMessages] = React.useState([
+        { role: "agent", text: `Hi ${user.name.split(" ")[0]}! I'm the CommUnity Agent. Ask me about contacts, recommendations, announcements, or your issues.` }
+    ]);
+    const [input, setInput] = React.useState("");
+    const [sessionId, setSessionId] = React.useState(null);
+    const [busy, setBusy] = React.useState(false);
+    const [error, setError] = React.useState("");
+
+    const sendMessage = async (event) => {
+        event.preventDefault();
+        const text = input.trim();
+        if (!text || busy) return;
+        setError("");
+        setMessages(prev => [...prev, { role: "user", text }]);
+        setInput(""); setBusy(true);
+        try {
+            const data = await apiFetch("/api/agent/chat", token, {
+                method: "POST",
+                body: JSON.stringify({ message: text, session_id: sessionId })
+            });
+            setSessionId(data.session_id);
+            setMessages(prev => [...prev, { role: "agent", text: data.response }]);
+        } catch (err) {
+            setError(err.message || "Agent request failed.");
+        } finally { setBusy(false); }
+    };
+
+    return (
+        <div className="agent-overlay" onClick={onClose}>
+            <section className="agent-panel" onClick={e => e.stopPropagation()} aria-label="CommUnity Agent">
+                <div className="agent-header">
+                    <div><strong>✨ CommUnity Agent</strong><span>Community information and actions</span></div>
+                    <button className="agent-close" onClick={onClose} aria-label="Close agent">×</button>
+                </div>
+                <div className="agent-messages">
+                    {messages.map((m, i) => <div key={i} className={`agent-message ${m.role}`}>{m.text}</div>)}
+                    {busy && <div className="agent-message agent">Thinking…</div>}
+                </div>
+                {error && <div className="agent-error">{error}</div>}
+                <form className="agent-input-row" onSubmit={sendMessage}>
+                    <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask CommUnity Agent…" disabled={busy} />
+                    <button type="submit" className="btn-primary btn-sm" disabled={busy || !input.trim()}>Send</button>
+                </form>
+                <div className="agent-hint">Writes require your explicit confirmation.</div>
+            </section>
+        </div>
+    );
+}
+
 function App() {
     const [token, setToken]             = React.useState(localStorage.getItem("token") || null);
     const [user, setUser]               = React.useState(null);
     const [loading, setLoading]         = React.useState(!!token);
     const [currentPage, setCurrentPage] = React.useState(token ? "dashboard" : "login");
     const [menuOpen, setMenuOpen]       = React.useState(false);
+    const [agentOpen, setAgentOpen]     = React.useState(false);
 
     const [loginEmail, setLoginEmail]       = React.useState("");
     const [loginPassword, setLoginPassword] = React.useState("");
@@ -1087,22 +1138,26 @@ function App() {
                     </nav>
                 )}
                 {user && (
-                    <div className="user-menu-container">
+                    <div className="header-actions">
+                        <button className="agent-trigger" onClick={() => { setAgentOpen(true); setMenuOpen(false); }}>✨ CommUnity Agent</button>
+                        <div className="user-menu-container">
                         <button className="user-menu-trigger" onClick={() => setMenuOpen(!menuOpen)}>
                             👤 {user.name} ({user.flat_number}) <span className="arrow">▼</span>
                         </button>
-                        {menuOpen && (
-                            <div className="user-dropdown">
-                                <button className="dropdown-item" onClick={() => { setCurrentPage("profile"); setMenuOpen(false); }}>Profile</button>
-                                <button className="dropdown-item" onClick={() => { handleLogout(); setMenuOpen(false); }}>Logout</button>
-                            </div>
-                        )}
+                            {menuOpen && (
+                                <div className="user-dropdown">
+                                    <button className="dropdown-item" onClick={() => { setCurrentPage("profile"); setMenuOpen(false); }}>Profile</button>
+                                    <button className="dropdown-item" onClick={() => { handleLogout(); setMenuOpen(false); }}>Logout</button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </header>
             <main className="main-content">
                 {renderContent()}
             </main>
+            {user && agentOpen && <CommUnityAgent token={token} user={user} onClose={() => setAgentOpen(false)} />}
             <footer className="footer">
                 <p>&copy; 2026 CommUnity Platform. All rights reserved.</p>
             </footer>

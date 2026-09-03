@@ -982,3 +982,24 @@ body {
 .cat-ann-security    { background-color: #fee2e2; color: #991b1b; }
 .cat-ann-water       { background-color: #e0f2fe; color: #0369a1; }
 .cat-ann-other       { background-color: #f1f5f9; color: #475569; }
+
+
+/* CommUnity Agent */
+.header-actions { display: flex; align-items: center; gap: 0.6rem; }
+.agent-trigger { background: var(--primary-light); color: var(--primary-color); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.45rem 0.75rem; font-weight: 600; cursor: pointer; }
+.agent-trigger:hover { border-color: var(--primary-color); }
+.agent-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.28); z-index: 100; display: flex; justify-content: flex-end; align-items: flex-start; padding: 5.2rem 1.25rem 1.25rem; }
+.agent-panel { width: min(420px, calc(100vw - 2rem)); height: min(680px, calc(100vh - 6.5rem)); background: var(--card-background); border: 1px solid var(--border-color); border-radius: 0.75rem; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18); display: flex; flex-direction: column; overflow: hidden; }
+.agent-header { display: flex; align-items: center; justify-content: space-between; padding: 0.9rem 1rem; border-bottom: 1px solid var(--border-color); }
+.agent-header strong { display: block; color: var(--primary-color); }
+.agent-header span { display: block; color: var(--text-muted); font-size: 0.78rem; margin-top: 0.1rem; }
+.agent-close { border: none; background: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; }
+.agent-messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.65rem; }
+.agent-message { max-width: 88%; padding: 0.65rem 0.8rem; border-radius: 0.7rem; white-space: pre-wrap; font-size: 0.9rem; }
+.agent-message.agent { align-self: flex-start; background: var(--primary-light); color: var(--text-color); }
+.agent-message.user { align-self: flex-end; background: var(--primary-color); color: #fff; }
+.agent-input-row { display: flex; gap: 0.5rem; padding: 0.8rem; border-top: 1px solid var(--border-color); }
+.agent-input-row input { flex: 1; min-width: 0; }
+.agent-error { margin: 0 0.8rem 0.5rem; padding: 0.55rem 0.7rem; border-radius: 0.4rem; background: #fef2f2; color: #991b1b; font-size: 0.82rem; }
+.agent-hint { padding: 0 0.8rem 0.7rem; font-size: 0.72rem; color: var(--text-muted); }
+@media (max-width: 900px) { .header { flex-wrap: wrap; gap: 0.5rem; } .nav { order: 3; width: 100%; overflow-x: auto; } .header-actions { margin-left: auto; } }
