@@ -8,8 +8,8 @@ const REC_CATEGORIES = [
 ];
 
 const ISSUE_CATEGORIES = ["All", "Water", "Lift", "Parking", "Security", "Housekeeping", "Electrical", "Other"];
-const ISSUE_STATUSES   = ["All", "Open", "Assigned", "In Progress", "Resolved", "Closed"];
-const ISSUE_ASSIGNEES  = [
+const ISSUE_STATUSES = ["All", "Open", "Assigned", "In Progress", "Resolved", "Closed"];
+const ISSUE_ASSIGNEES = [
     "Maintenance Manager", "Plumbing & Electrical Lead",
     "Housekeeping Supervisor", "Head of Security", "Other"
 ];
@@ -37,9 +37,9 @@ function apiFetch(path, token, options = {}) {
 
 function ContactsPage({ token }) {
     const [contacts, setContacts] = React.useState([]);
-    const [loading, setLoading]   = React.useState(true);
-    const [error, setError]       = React.useState("");
-    const [search, setSearch]     = React.useState("");
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState("");
+    const [search, setSearch] = React.useState("");
     const [category, setCategory] = React.useState("All");
     const [selected, setSelected] = React.useState(null);
 
@@ -50,12 +50,12 @@ function ContactsPage({ token }) {
         if (q && q.trim()) params.append("search", q.trim());
         apiFetch(`/api/contacts?${params.toString()}`, token)
             .then(data => { setContacts(data); setLoading(false); })
-            .catch(err  => { setError(err.message); setLoading(false); });
+            .catch(err => { setError(err.message); setLoading(false); });
     };
 
     React.useEffect(() => { fetchContacts("All", ""); }, []);
 
-    const handleSearch         = (e) => { e.preventDefault(); fetchContacts(category, search); };
+    const handleSearch = (e) => { e.preventDefault(); fetchContacts(category, search); };
     const handleCategoryChange = (cat) => { setCategory(cat); fetchContacts(cat, search); };
 
     if (selected) {
@@ -66,8 +66,8 @@ function ContactsPage({ token }) {
                 <span className={`category-badge cat-${selected.category.toLowerCase()}`}>{selected.category}</span>
                 <div className="detail-grid">
                     <div className="detail-row"><strong>Designation</strong><span>{selected.designation}</span></div>
-                    {selected.phone        && <div className="detail-row"><strong>Phone</strong><span>{selected.phone}</span></div>}
-                    {selected.email        && <div className="detail-row"><strong>Email</strong><span>{selected.email}</span></div>}
+                    {selected.phone && <div className="detail-row"><strong>Phone</strong><span>{selected.phone}</span></div>}
+                    {selected.email && <div className="detail-row"><strong>Email</strong><span>{selected.email}</span></div>}
                     {selected.availability && <div className="detail-row"><strong>Availability</strong><span>{selected.availability}</span></div>}
                 </div>
             </div>
@@ -88,7 +88,7 @@ function ContactsPage({ token }) {
                 ))}
             </div>
             {loading && <p className="loading-text">Loading contacts...</p>}
-            {error   && <div className="error-panel">{error}</div>}
+            {error && <div className="error-panel">{error}</div>}
             {!loading && !error && contacts.length === 0 && <div className="empty-state">No contacts found.</div>}
             {!loading && contacts.length > 0 && (
                 <div className="list">
@@ -114,12 +114,12 @@ function ContactsPage({ token }) {
 
 function AddRecommendationForm({ token, onAdded, onCancel }) {
     const [serviceName, setServiceName] = React.useState("");
-    const [category, setCategory]       = React.useState("Plumber");
+    const [category, setCategory] = React.useState("Plumber");
     const [categoryOther, setCategoryOther] = React.useState("");
     const [description, setDescription] = React.useState("");
     const [contactInfo, setContactInfo] = React.useState("");
-    const [error, setError]             = React.useState("");
-    const [saving, setSaving]           = React.useState(false);
+    const [error, setError] = React.useState("");
+    const [saving, setSaving] = React.useState(false);
 
     const effectiveCategory = category === "Other" ? categoryOther.trim() : category;
 
@@ -132,8 +132,8 @@ function AddRecommendationForm({ token, onAdded, onCancel }) {
             method: "POST",
             body: JSON.stringify({ service_name: serviceName, category: effectiveCategory, description, contact_info: contactInfo })
         })
-        .then(rec => { setSaving(false); onAdded(rec); })
-        .catch(err => { setError(err.message); setSaving(false); });
+            .then(rec => { setSaving(false); onAdded(rec); })
+            .catch(err => { setError(err.message); setSaving(false); });
     };
 
     return (
@@ -175,16 +175,16 @@ function AddRecommendationForm({ token, onAdded, onCancel }) {
 function EditRecommendationForm({ token, rec, onSaved, onCancel }) {
     // If existing category isn't in the predefined list, treat it as a custom "Other" value
     const knownCats = REC_CATEGORIES.filter(c => c !== "All");
-    const initCat   = knownCats.includes(rec.category) ? rec.category : "Other";
+    const initCat = knownCats.includes(rec.category) ? rec.category : "Other";
     const initOther = knownCats.includes(rec.category) ? "" : rec.category;
 
-    const [serviceName, setServiceName]     = React.useState(rec.service_name);
-    const [category, setCategory]           = React.useState(initCat);
+    const [serviceName, setServiceName] = React.useState(rec.service_name);
+    const [category, setCategory] = React.useState(initCat);
     const [categoryOther, setCategoryOther] = React.useState(initOther);
-    const [description, setDescription]     = React.useState(rec.description);
-    const [contactInfo, setContactInfo]     = React.useState(rec.contact_info || "");
-    const [error, setError]                 = React.useState("");
-    const [saving, setSaving]               = React.useState(false);
+    const [description, setDescription] = React.useState(rec.description);
+    const [contactInfo, setContactInfo] = React.useState(rec.contact_info || "");
+    const [error, setError] = React.useState("");
+    const [saving, setSaving] = React.useState(false);
 
     const effectiveCategory = category === "Other" ? categoryOther.trim() : category;
 
@@ -197,8 +197,8 @@ function EditRecommendationForm({ token, rec, onSaved, onCancel }) {
             method: "PUT",
             body: JSON.stringify({ service_name: serviceName, category: effectiveCategory, description, contact_info: contactInfo })
         })
-        .then(updated => { setSaving(false); onSaved(updated); })
-        .catch(err => { setError(err.message); setSaving(false); });
+            .then(updated => { setSaving(false); onSaved(updated); })
+            .catch(err => { setError(err.message); setSaving(false); });
     };
 
     return (
@@ -237,15 +237,15 @@ function EditRecommendationForm({ token, rec, onSaved, onCancel }) {
 // ─── Recommendations Page ─────────────────────────────────────────────────────
 
 function RecommendationsPage({ token, user }) {
-    const [view, setView]           = React.useState("list");
-    const [recs, setRecs]           = React.useState([]);
-    const [loading, setLoading]     = React.useState(true);
-    const [error, setError]         = React.useState("");
-    const [search, setSearch]       = React.useState("");
-    const [category, setCategory]   = React.useState("All");
-    const [sortBy, setSortBy]       = React.useState("votes");
-    const [selected, setSelected]   = React.useState(null);
-    const [voteMsg, setVoteMsg]     = React.useState("");
+    const [view, setView] = React.useState("list");
+    const [recs, setRecs] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState("");
+    const [search, setSearch] = React.useState("");
+    const [category, setCategory] = React.useState("All");
+    const [sortBy, setSortBy] = React.useState("votes");
+    const [selected, setSelected] = React.useState(null);
+    const [voteMsg, setVoteMsg] = React.useState("");
     const [actionMsg, setActionMsg] = React.useState("");
 
     const fetchRecs = (cat, q) => {
@@ -255,12 +255,12 @@ function RecommendationsPage({ token, user }) {
         if (q && q.trim()) params.append("search", q.trim());
         apiFetch(`/api/recommendations?${params.toString()}`, token)
             .then(data => { setRecs(data); setLoading(false); })
-            .catch(err  => { setError(err.message); setLoading(false); });
+            .catch(err => { setError(err.message); setLoading(false); });
     };
 
     React.useEffect(() => { fetchRecs("All", ""); }, []);
 
-    const handleSearch         = (e) => { e.preventDefault(); fetchRecs(category, search); };
+    const handleSearch = (e) => { e.preventDefault(); fetchRecs(category, search); };
     const handleCategoryChange = (cat) => { setCategory(cat); fetchRecs(cat, search); };
 
     const handleVote = (rec) => {
@@ -289,7 +289,7 @@ function RecommendationsPage({ token, user }) {
 
     const canModify = (rec) => user && (rec.created_by_user_id === user.id || user.role === "Admin");
 
-    if (view === "add")  return <AddRecommendationForm token={token} onAdded={handleAdded} onCancel={() => setView("list")} />;
+    if (view === "add") return <AddRecommendationForm token={token} onAdded={handleAdded} onCancel={() => setView("list")} />;
     if (view === "edit" && selected) return <EditRecommendationForm token={token} rec={selected} onSaved={handleSaved} onCancel={() => setView("detail")} />;
 
     if (view === "detail" && selected) {
@@ -313,7 +313,7 @@ function RecommendationsPage({ token, user }) {
                         </button>
                     </div>
                 </div>
-                {voteMsg   && <div className="error-panel">{voteMsg}</div>}
+                {voteMsg && <div className="error-panel">{voteMsg}</div>}
                 {actionMsg && <div className="error-panel">{actionMsg}</div>}
                 <div className="detail-grid">
                     <div className="detail-row detail-description">
@@ -364,7 +364,7 @@ function RecommendationsPage({ token, user }) {
                 </div>
             </div>
             {loading && <p className="loading-text">Loading recommendations...</p>}
-            {error   && <div className="error-panel">{error}</div>}
+            {error && <div className="error-panel">{error}</div>}
             {!loading && !error && recs.length === 0 && <div className="empty-state">No recommendations found. Be the first to add one!</div>}
             {!loading && recs.length > 0 && (
                 <div className="list">
@@ -399,14 +399,14 @@ function RecommendationsPage({ token, user }) {
 // ─── Report Issue Form ────────────────────────────────────────────────────────
 
 function ReportIssueForm({ token, onAdded, onCancel }) {
-    const [title, setTitle]               = React.useState("");
-    const [category, setCategory]         = React.useState("Water");
+    const [title, setTitle] = React.useState("");
+    const [category, setCategory] = React.useState("Water");
     const [categoryOther, setCategoryOther] = React.useState("");
-    const [location, setLocation]         = React.useState("");
-    const [description, setDescription]   = React.useState("");
+    const [location, setLocation] = React.useState("");
+    const [description, setDescription] = React.useState("");
     const [attachmentRef, setAttachmentRef] = React.useState("");
-    const [error, setError]               = React.useState("");
-    const [saving, setSaving]             = React.useState(false);
+    const [error, setError] = React.useState("");
+    const [saving, setSaving] = React.useState(false);
 
     const effectiveCategory = category === "Other" ? categoryOther.trim() : category;
 
@@ -421,8 +421,8 @@ function ReportIssueForm({ token, onAdded, onCancel }) {
             method: "POST",
             body: JSON.stringify({ title, category: effectiveCategory, location, description, attachment_ref: attachmentRef })
         })
-        .then(issue => { setSaving(false); onAdded(issue); })
-        .catch(err  => { setError(err.message); setSaving(false); });
+            .then(issue => { setSaving(false); onAdded(issue); })
+            .catch(err => { setError(err.message); setSaving(false); });
     };
 
     return (
@@ -467,42 +467,42 @@ function ReportIssueForm({ token, onAdded, onCancel }) {
 
 function IssuesPage({ token, user }) {
     const userRole = user ? user.role : "Resident";
-    const userId   = user ? user.id   : null;
+    const userId = user ? user.id : null;
 
-    const [view, setView]                 = React.useState("list");
-    const [issues, setIssues]             = React.useState([]);
-    const [loading, setLoading]           = React.useState(true);
-    const [error, setError]               = React.useState("");
-    const [search, setSearch]             = React.useState("");
-    const [category, setCategory]         = React.useState("All");
+    const [view, setView] = React.useState("list");
+    const [issues, setIssues] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState("");
+    const [search, setSearch] = React.useState("");
+    const [category, setCategory] = React.useState("All");
     const [statusFilter, setStatusFilter] = React.useState("All");
-    const [onlyMine, setOnlyMine]         = React.useState(false);
-    const [selected, setSelected]         = React.useState(null);
+    const [onlyMine, setOnlyMine] = React.useState(false);
+    const [selected, setSelected] = React.useState(null);
     const [adminUpdateError, setAdminUpdateError] = React.useState("");
-    const [adminStatus, setAdminStatus]     = React.useState("Open");
+    const [adminStatus, setAdminStatus] = React.useState("Open");
     const [adminAssignee, setAdminAssignee] = React.useState("");
     const [adminAssigneeOther, setAdminAssigneeOther] = React.useState("");
-    const [adminNote, setAdminNote]         = React.useState("");
-    const [updating, setUpdating]           = React.useState(false);
+    const [adminNote, setAdminNote] = React.useState("");
+    const [updating, setUpdating] = React.useState(false);
 
     const fetchIssues = (cat, stat, q, mine) => {
         setLoading(true); setError("");
         const params = new URLSearchParams();
-        if (cat  && cat  !== "All") params.append("category",  cat);
-        if (stat && stat !== "All") params.append("status",    stat);
-        if (q && q.trim())          params.append("search",    q.trim());
-        if (mine)                   params.append("only_mine", "true");
+        if (cat && cat !== "All") params.append("category", cat);
+        if (stat && stat !== "All") params.append("status", stat);
+        if (q && q.trim()) params.append("search", q.trim());
+        if (mine) params.append("only_mine", "true");
         apiFetch(`/api/issues?${params.toString()}`, token)
             .then(data => { setIssues(data); setLoading(false); })
-            .catch(err  => { setError(err.message); setLoading(false); });
+            .catch(err => { setError(err.message); setLoading(false); });
     };
 
-    React.useEffect(() => { fetchIssues("All", "All", "", false); }, []);
+    React.useEffect(() => { fetchIssues("All", "All", "", userRole === "Admin"); }, []);
 
-    const handleSearch             = (e) => { e.preventDefault(); fetchIssues(category, statusFilter, search, onlyMine); };
-    const handleCategoryChange     = (e) => { const cat  = e.target.value; setCategory(cat);      fetchIssues(cat,      statusFilter, search, onlyMine); };
-    const handleStatusFilterChange = (e) => { const stat = e.target.value; setStatusFilter(stat); fetchIssues(category, stat,         search, onlyMine); };
-    const handleOnlyMineChange     = (e) => { const mine = e.target.checked; setOnlyMine(mine);   fetchIssues(category, statusFilter, search, mine);    };
+    const handleSearch = (e) => { e.preventDefault(); fetchIssues(category, statusFilter, search, onlyMine); };
+    const handleCategoryChange = (e) => { const cat = e.target.value; setCategory(cat); fetchIssues(cat, statusFilter, search, onlyMine); };
+    const handleStatusFilterChange = (e) => { const stat = e.target.value; setStatusFilter(stat); fetchIssues(category, stat, search, onlyMine); };
+    const handleOnlyMineChange = (e) => { const mine = e.target.checked; setOnlyMine(mine); fetchIssues(category, statusFilter, search, mine); };
 
     const handleOpenDetail = (issue) => {
         setSelected(issue);
@@ -527,13 +527,13 @@ function IssuesPage({ token, user }) {
             method: "PUT",
             body: JSON.stringify({ status: adminStatus, assigned_to: effectiveAssignee, admin_note: adminNote })
         })
-        .then(() => {
-            setUpdating(false);
-            // Refresh list and return to it
-            fetchIssues(category, statusFilter, search, onlyMine);
-            setView("list"); setSelected(null);
-        })
-        .catch(err => { setAdminUpdateError(err.message); setUpdating(false); });
+            .then(() => {
+                setUpdating(false);
+                // Refresh list and return to it
+                fetchIssues(category, statusFilter, search, onlyMine);
+                setView("list"); setSelected(null);
+            })
+            .catch(err => { setAdminUpdateError(err.message); setUpdating(false); });
     };
 
     if (view === "add") {
@@ -543,7 +543,7 @@ function IssuesPage({ token, user }) {
     }
 
     if (view === "detail" && selected) {
-        const isCreator     = selected.created_by_user_id === userId;
+        const isCreator = selected.created_by_user_id === userId;
         const reporterLabel = userRole === "Admin" ? selected.created_by_name : (isCreator ? "You" : null);
 
         return (
@@ -649,7 +649,7 @@ function IssuesPage({ token, user }) {
             )}
 
             {loading && <p className="loading-text">Loading issues...</p>}
-            {error   && <div className="error-panel">{error}</div>}
+            {error && <div className="error-panel">{error}</div>}
             {!loading && !error && issues.length === 0 && <div className="empty-state">No issues found. Everything is running smoothly!</div>}
 
             {!loading && issues.length > 0 && (
@@ -682,25 +682,25 @@ function IssuesPage({ token, user }) {
 function AnnouncementsPage({ token, user }) {
     const isAdmin = user && user.role === "Admin";
 
-    const [view, setView]                   = React.useState("list");
+    const [view, setView] = React.useState("list");
     const [announcements, setAnnouncements] = React.useState([]);
-    const [loading, setLoading]             = React.useState(true);
-    const [error, setError]                 = React.useState("");
-    const [selected, setSelected]           = React.useState(null);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState("");
+    const [selected, setSelected] = React.useState(null);
 
-    const [formTitle, setFormTitle]               = React.useState("");
-    const [formContent, setFormContent]           = React.useState("");
-    const [formCategory, setFormCategory]         = React.useState("General");
+    const [formTitle, setFormTitle] = React.useState("");
+    const [formContent, setFormContent] = React.useState("");
+    const [formCategory, setFormCategory] = React.useState("General");
     const [formCategoryOther, setFormCategoryOther] = React.useState("");
-    const [formStatus, setFormStatus]             = React.useState("published");
-    const [formError, setFormError]               = React.useState("");
-    const [saving, setSaving]                     = React.useState(false);
+    const [formStatus, setFormStatus] = React.useState("published");
+    const [formError, setFormError] = React.useState("");
+    const [saving, setSaving] = React.useState(false);
 
     const fetchAnnouncements = () => {
         setLoading(true);
         apiFetch("/api/announcements", token)
             .then(data => { setAnnouncements(data); setLoading(false); })
-            .catch(err  => { setError(err.message); setLoading(false); });
+            .catch(err => { setError(err.message); setLoading(false); });
     };
 
     React.useEffect(() => { fetchAnnouncements(); }, []);
@@ -731,12 +731,12 @@ function AnnouncementsPage({ token, user }) {
             method: isEdit ? "PUT" : "POST",
             body: JSON.stringify({ title: formTitle, content: formContent, category: effectiveCat, status: formStatus })
         })
-        .then(() => {
-            setSaving(false);
-            fetchAnnouncements();
-            setView("list"); setSelected(null);
-        })
-        .catch(err => { setFormError(err.message); setSaving(false); });
+            .then(() => {
+                setSaving(false);
+                fetchAnnouncements();
+                setView("list"); setSelected(null);
+            })
+            .catch(err => { setFormError(err.message); setSaving(false); });
     };
 
     const handleArchive = (ann) => {
@@ -745,8 +745,8 @@ function AnnouncementsPage({ token, user }) {
             method: "PUT",
             body: JSON.stringify({ title: ann.title, content: ann.content, category: ann.category, status: "archived" })
         })
-        .then(() => { fetchAnnouncements(); setView("list"); setSelected(null); })
-        .catch(err => { setError(err.message); });
+            .then(() => { fetchAnnouncements(); setView("list"); setSelected(null); })
+            .catch(err => { setError(err.message); });
     };
 
     if (view === "add" || view === "edit") {
@@ -835,7 +835,7 @@ function AnnouncementsPage({ token, user }) {
             </div>
             <p className="info-text">Community announcements from the management team.</p>
             {loading && <p className="loading-text">Loading announcements...</p>}
-            {error   && <div className="error-panel">{error}</div>}
+            {error && <div className="error-panel">{error}</div>}
             {!loading && !error && visible.length === 0 && <div className="empty-state">No announcements at this time.</div>}
             {!loading && visible.length > 0 && (
                 <div className="list">
@@ -860,7 +860,7 @@ function AnnouncementsPage({ token, user }) {
 // ─── Announcements Dashboard Widget ──────────────────────────────────────────
 
 function AnnouncementsWidget({ token, onNavigate }) {
-    const [items, setItems]     = React.useState([]);
+    const [items, setItems] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
 
     React.useEffect(() => {
@@ -897,6 +897,22 @@ function AnnouncementsWidget({ token, onNavigate }) {
             )}
         </div>
     );
+}
+
+function renderAgentText(text) {
+    const lines = String(text || "").split("\n");
+
+    return lines.map((line, lineIndex) => (
+        <React.Fragment key={lineIndex}>
+            {line.split(/(\*\*[^*]+\*\*)/g).map((part, partIndex) => {
+                const isBold = part.startsWith("**") && part.endsWith("**");
+                return isBold
+                    ? <strong key={partIndex}>{part.slice(2, -2)}</strong>
+                    : <React.Fragment key={partIndex}>{part}</React.Fragment>;
+            })}
+            {lineIndex < lines.length - 1 && <br />}
+        </React.Fragment>
+    ));
 }
 
 // ─── App Root ─────────────────────────────────────────────────────────────────
@@ -937,7 +953,11 @@ function CommUnityAgent({ token, user, onClose }) {
                     <button className="agent-close" onClick={onClose} aria-label="Close agent">×</button>
                 </div>
                 <div className="agent-messages">
-                    {messages.map((m, i) => <div key={i} className={`agent-message ${m.role}`}>{m.text}</div>)}
+                    {messages.map((m, i) => (
+                        <div key={i} className={`agent-message ${m.role}`}>
+                            {renderAgentText(m.text)}
+                        </div>
+                    ))}
                     {busy && <div className="agent-message agent">Thinking…</div>}
                 </div>
                 {error && <div className="agent-error">{error}</div>}
@@ -952,24 +972,24 @@ function CommUnityAgent({ token, user, onClose }) {
 }
 
 function App() {
-    const [token, setToken]             = React.useState(localStorage.getItem("token") || null);
-    const [user, setUser]               = React.useState(null);
-    const [loading, setLoading]         = React.useState(!!token);
+    const [token, setToken] = React.useState(localStorage.getItem("token") || null);
+    const [user, setUser] = React.useState(null);
+    const [loading, setLoading] = React.useState(!!token);
     const [currentPage, setCurrentPage] = React.useState(token ? "dashboard" : "login");
-    const [menuOpen, setMenuOpen]       = React.useState(false);
-    const [agentOpen, setAgentOpen]     = React.useState(false);
+    const [menuOpen, setMenuOpen] = React.useState(false);
+    const [agentOpen, setAgentOpen] = React.useState(false);
 
-    const [loginEmail, setLoginEmail]       = React.useState("");
+    const [loginEmail, setLoginEmail] = React.useState("");
     const [loginPassword, setLoginPassword] = React.useState("");
-    const [loginError, setLoginError]       = React.useState("");
-    const [loginSuccess, setLoginSuccess]   = React.useState("");
+    const [loginError, setLoginError] = React.useState("");
+    const [loginSuccess, setLoginSuccess] = React.useState("");
 
-    const [signupName, setSignupName]                       = React.useState("");
-    const [signupEmail, setSignupEmail]                     = React.useState("");
-    const [signupFlat, setSignupFlat]                       = React.useState("");
-    const [signupPassword, setSignupPassword]               = React.useState("");
+    const [signupName, setSignupName] = React.useState("");
+    const [signupEmail, setSignupEmail] = React.useState("");
+    const [signupFlat, setSignupFlat] = React.useState("");
+    const [signupPassword, setSignupPassword] = React.useState("");
     const [signupConfirmPassword, setSignupConfirmPassword] = React.useState("");
-    const [signupError, setSignupError]                     = React.useState("");
+    const [signupError, setSignupError] = React.useState("");
 
     React.useEffect(() => {
         if (token) {
@@ -993,16 +1013,16 @@ function App() {
             method: "POST",
             body: JSON.stringify({ email: loginEmail, password: loginPassword })
         })
-        .then(data => {
-            localStorage.setItem("token", data.access_token);
-            setToken(data.access_token);
-            setLoginEmail(""); setLoginPassword("");
-            setLoginSuccess(""); setCurrentPage("dashboard");
-        })
-        .catch(err => {
-            setLoginEmail(""); setLoginPassword("");
-            setLoginError(err.message || "Invalid email or password.");
-        });
+            .then(data => {
+                localStorage.setItem("token", data.access_token);
+                setToken(data.access_token);
+                setLoginEmail(""); setLoginPassword("");
+                setLoginSuccess(""); setCurrentPage("dashboard");
+            })
+            .catch(err => {
+                setLoginEmail(""); setLoginPassword("");
+                setLoginError(err.message || "Invalid email or password.");
+            });
     };
 
     const handleSignup = (e) => {
@@ -1016,13 +1036,13 @@ function App() {
             method: "POST",
             body: JSON.stringify({ name: signupName, email: signupEmail, flat_number: signupFlat, password: signupPassword, confirm_password: signupConfirmPassword })
         })
-        .then(() => {
-            setSignupName(""); setSignupEmail(""); setSignupFlat(""); setSignupPassword(""); setSignupConfirmPassword("");
-            setLoginEmail(""); setLoginPassword(""); setLoginError("");
-            setLoginSuccess("Account registered successfully! Please log in.");
-            setCurrentPage("login");
-        })
-        .catch(err => setSignupError(err.message));
+            .then(() => {
+                setSignupName(""); setSignupEmail(""); setSignupFlat(""); setSignupPassword(""); setSignupConfirmPassword("");
+                setLoginEmail(""); setLoginPassword(""); setLoginError("");
+                setLoginSuccess("Account registered successfully! Please log in.");
+                setCurrentPage("login");
+            })
+            .catch(err => setSignupError(err.message));
     };
 
     const handleLogout = () => {
@@ -1064,7 +1084,7 @@ function App() {
                     <h2>CommUnity Login</h2>
                     <p className="welcome-text">Log in to interact with your neighborhood portal.</p>
                     {loginSuccess && <div className="success-panel">{loginSuccess}</div>}
-                    {loginError   && <div className="error-panel">{loginError}</div>}
+                    {loginError && <div className="error-panel">{loginError}</div>}
                     <form onSubmit={handleLogin}>
                         <div className="form-group"><label>Email Address</label>
                             <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="name@example.com" /></div>
@@ -1124,11 +1144,11 @@ function App() {
                 {user && (
                     <nav className="nav">
                         {[
-                            ["dashboard",       "Dashboard"],
-                            ["contacts",        "Contacts"],
+                            ["dashboard", "Dashboard"],
+                            ["contacts", "Contacts"],
                             ["recommendations", "Recommendations"],
-                            ["issues",          "Issues"],
-                            ["announcements",   "Announcements"]
+                            ["issues", "Issues"],
+                            ["announcements", "Announcements"]
                         ].map(([page, label]) => (
                             <button key={page}
                                 className={`nav-link ${currentPage === page ? "active" : ""}`}
@@ -1141,9 +1161,9 @@ function App() {
                     <div className="header-actions">
                         <button className="agent-trigger" onClick={() => { setAgentOpen(true); setMenuOpen(false); }}>✨ CommUnity Agent</button>
                         <div className="user-menu-container">
-                        <button className="user-menu-trigger" onClick={() => setMenuOpen(!menuOpen)}>
-                            👤 {user.name} ({user.flat_number}) <span className="arrow">▼</span>
-                        </button>
+                            <button className="user-menu-trigger" onClick={() => setMenuOpen(!menuOpen)}>
+                                👤 {user.name} ({user.flat_number}) <span className="arrow">▼</span>
+                            </button>
                             {menuOpen && (
                                 <div className="user-dropdown">
                                     <button className="dropdown-item" onClick={() => { setCurrentPage("profile"); setMenuOpen(false); }}>Profile</button>

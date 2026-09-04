@@ -25,14 +25,9 @@ from agent_routes import router as agent_router
 
 app = FastAPI(title="CommUnity API")
 
-# Configure CORS (useful for development)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# The frontend is served by this same FastAPI application, so CORS is not
+# required for normal local/Cloud Run use. If a separate frontend is introduced,
+# configure an explicit allowlist of trusted origins instead of using "*" with credentials.
 
 # Mount agent router
 app.include_router(agent_router)
@@ -349,8 +344,12 @@ def list_issues(
     current_user: dict = Depends(get_current_user)
 ):
     """Returns community issues with filters. Residents can filter to their own reported issues."""
-    user_id = current_user["id"]
-    filter_user_id = user_id if only_mine else None
+    # Residents must never be able to browse another resident's issues.
+    # Admins may see the full issue history.
+    if current_user.get("role") == "Admin":
+        filter_user_id = current_user["id"] if only_mine else None
+    else:
+        filter_user_id = current_user["id"]
     return get_all_issues(category=category, status=status, search=search, user_id=filter_user_id)
 
 
@@ -359,6 +358,8 @@ def get_issue(issue_id: int, current_user: dict = Depends(get_current_user)):
     """Returns a single issue by ID."""
     issue = get_issue_by_id(issue_id)
     if not issue:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    if current_user.get("role") != "Admin" and issue.get("created_by_user_id") != current_user["id"]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
     return issue
 
@@ -470,7 +471,9 @@ def add_announcement(
     title = payload.title.strip()
     content = payload.content.strip()
     category = payload.category.strip() if payload.category else "General"
-    ann_status = payload.status if payload.status in ("published", "archived") else "published"
+    ann_status = payload.status.strip().lower()
+    if ann_status not in ("published", "archived"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Status must be published or archived")
 
     if not title or not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title and content are required")
@@ -507,7 +510,9 @@ def edit_announcement(
     title = payload.title.strip()
     content = payload.content.strip()
     category = payload.category.strip() if payload.category else "General"
-    ann_status = payload.status if payload.status in ("published", "archived") else "published"
+    ann_status = payload.status.strip().lower()
+    if ann_status not in ("published", "archived"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Status must be published or archived")
 
     if not title or not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title and content are required")
