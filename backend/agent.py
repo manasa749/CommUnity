@@ -16,7 +16,7 @@ from database import (
     create_recommendation as db_create_recommendation, update_recommendation_details as db_update_recommendation,
 )
 
-_MODEL = "gemini-3.8-flash"
+_MODEL = "gemini-3.7-flash"
 _APP_NAME = "community_agent"
 session_service = InMemorySessionService()
 
