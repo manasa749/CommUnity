@@ -322,25 +322,28 @@ def init_db():
 # ---------------------------------------------------------------------------
 
 def _seed_contacts():
-    """Insert seed community contacts if the table is empty."""
+    """Insert seed community contacts only when the contacts table is empty."""
     conn = get_db_connection()
     cursor = _cursor(conn)
-    # Delete existing seed contacts to allow changes to update immediately
-    cursor.execute("DELETE FROM contacts WHERE is_seed = 1")
+    cursor.execute("SELECT COUNT(*) AS cnt FROM contacts")
+    row = cursor.fetchone()
+    if row and row["cnt"] > 0:
+        _close(conn)
+        return
 
     seed_contacts = [
-        ("Suresh Nair",         "Community President",          "Management",  "+91 98400 11001", "president@community.in",   "Mon\u2013Fri, 10am\u20136pm", 1),
-        ("Meera Krishnamurthy", "Community Secretary",          "Management",  "+91 98400 11002", "secretary@community.in",   "Mon\u2013Sat, 9am\u20135pm",  1),
-        ("Anand Kumar",         "Maintenance Manager",          "Maintenance", "+91 98400 22001", "maintenance@community.in", "Mon\u2013Sat, 8am\u20137pm",  1),
-        ("Lakshmi Sundaram",    "Housekeeping Supervisor",      "Maintenance", "+91 98400 22003", None,                       "Mon\u2013Sat, 7am\u20135pm",  1),
-        ("Vijay Mohan",         "Plumbing & Electrical Lead",   "Maintenance", "+91 98400 22002", None,                       "Mon\u2013Sat, 9am\u20136pm",  1),
-        ("Babu Thomas",         "Head of Security",             "Security",    "+91 98400 33002", "security@community.in",    "Mon\u2013Sat, 9am\u20136pm",  1),
-        ("Security Office",     "Main Gate Security Desk",      "Security",    "+91 98400 33001", None,                       "24 \u00d7 7",                 1),
-        ("Ambulance / Police",  "Emergency Services Helpline",  "Emergency",   "112",             None,                       "24 \u00d7 7",                 1),
-        ("KSEB Complaint Cell", "Electricity Board Helpline",   "Emergency",   "1800-425-0022",   None,                       "24 \u00d7 7",                 1),
-        ("KWA Helpline",        "Water Authority Helpline",     "Emergency",   "1916",            None,                       "24 \u00d7 7",                 1),
-        ("Community Cab Pool",  "Shared Transport Coordinator", "Other",       "+91 98400 55002", "cabpool@community.in",     "7am\u201310pm",               1),
-        ("Ravi Shankar",        "General Facilities Coordinator","Other",      "+91 98400 55003", "facilities@community.in",  "Mon\u2013Sat, 9am\u20136pm",  1),
+        ("Suresh Nair",         "Community President",          "Management",  "+91 98400 11001", "president@community.in",   "Mon–Fri, 10am–6pm", 1),
+        ("Meera Krishnamurthy", "Community Secretary",          "Management",  "+91 98400 11002", "secretary@community.in",   "Mon–Sat, 9am–5pm",  1),
+        ("Anand Kumar",         "Maintenance Manager",          "Maintenance", "+91 98400 22001", "maintenance@community.in", "Mon–Sat, 8am–7pm",  1),
+        ("Lakshmi Sundaram",    "Housekeeping Supervisor",      "Maintenance", "+91 98400 22003", None,                       "Mon–Sat, 7am–5pm",  1),
+        ("Vijay Mohan",         "Plumbing & Electrical Lead",   "Maintenance", "+91 98400 22002", None,                       "Mon–Sat, 9am–6pm",  1),
+        ("Babu Thomas",         "Head of Security",             "Security",    "+91 98400 33002", "security@community.in",    "Mon–Sat, 9am–6pm",  1),
+        ("Security Office",     "Main Gate Security Desk",      "Security",    "+91 98400 33001", None,                       "24 × 7",                 1),
+        ("Ambulance / Police",  "Emergency Services Helpline",  "Emergency",   "112",             None,                       "24 × 7",                 1),
+        ("KSEB Complaint Cell", "Electricity Board Helpline",   "Emergency",   "1800-425-0022",   None,                       "24 × 7",                 1),
+        ("KWA Helpline",        "Water Authority Helpline",     "Emergency",   "1916",            None,                       "24 × 7",                 1),
+        ("Community Cab Pool",  "Shared Transport Coordinator", "Other",       "+91 98400 55002", "cabpool@community.in",     "7am–10pm",               1),
+        ("Ravi Shankar",        "General Facilities Coordinator","Other",      "+91 98400 55003", "facilities@community.in",  "Mon–Sat, 9am–6pm",  1),
     ]
 
     cursor.executemany(
@@ -349,7 +352,6 @@ def _seed_contacts():
     )
     conn.commit()
     _close(conn)
-
 
 def _seed_recommendations():
     """Insert seed recommendations if the table is empty. Uses a placeholder user id = 0."""
@@ -511,6 +513,27 @@ def update_contact(contact_id: int, name: str, designation: str, category: str,
     conn.commit()
     _close(conn)
     return get_contact_by_id(contact_id) if changed else None
+
+
+def delete_contact(contact_id: int):
+    """Deletes a community contact by ID."""
+    conn = get_db_connection()
+    cursor = _cursor(conn)
+    cursor.execute("DELETE FROM contacts WHERE id = %s", (contact_id,))
+    deleted = cursor.rowcount
+    conn.commit()
+    _close(conn)
+    return deleted > 0
+
+
+def get_all_residents():
+    """Returns safe resident fields only, newest records first."""
+    conn = get_db_connection()
+    cursor = _cursor(conn)
+    cursor.execute("SELECT name, email, flat_number, role FROM users ORDER BY id DESC")
+    rows = cursor.fetchall()
+    _close(conn)
+    return [dict(row) for row in rows]
 
 
 # \u2500\u2500\u2500 Recommendation queries \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500

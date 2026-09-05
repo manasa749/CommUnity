@@ -13,7 +13,7 @@ load_dotenv()
 # Import database and authentication helper functions
 from database import (
     get_user_by_email, create_user,
-    get_all_contacts, get_contact_by_id,
+    get_all_contacts, get_contact_by_id, create_contact, update_contact, delete_contact,
     get_all_recommendations, get_recommendation_by_id, create_recommendation,
     upvote_recommendation, toggle_vote_recommendation, get_user_votes, has_user_voted,
     update_recommendation_details, delete_recommendation_by_id,
@@ -47,6 +47,22 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+class CreateContactRequest(BaseModel):
+    name: str
+    designation: str
+    category: str
+    phone: str = ""
+    email: str = ""
+    availability: str = ""
+
+class UpdateContactRequest(BaseModel):
+    name: str
+    designation: str
+    category: str
+    phone: str = ""
+    email: str = ""
+    availability: str = ""
 
 class CreateRecommendationRequest(BaseModel):
     service_name: str
@@ -197,6 +213,72 @@ def get_contact(contact_id: int, current_user: dict = Depends(get_current_user))
     if not contact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
     return contact
+
+@app.post("/api/contacts")
+def add_contact(payload: CreateContactRequest, current_user: dict = Depends(get_current_user)):
+    """Creates a community contact. Admin only."""
+    if current_user.get("role") != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin permission is required")
+
+    name = payload.name.strip()
+    designation = payload.designation.strip()
+    category = payload.category.strip()
+    phone = payload.phone.strip()
+    email = payload.email.strip()
+    availability = payload.availability.strip()
+    valid_categories = ["Management", "Maintenance", "Security", "Emergency", "Other"]
+
+    if not name or not designation or not category:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name, designation, and category are required")
+    if category not in valid_categories:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category. Choose from: {', '.join(valid_categories)}")
+
+    contact = create_contact(name, designation, category, phone, email, availability)
+    if not contact:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create contact")
+    return contact
+
+
+@app.put("/api/contacts/{contact_id}")
+def edit_contact(contact_id: int, payload: UpdateContactRequest, current_user: dict = Depends(get_current_user)):
+    """Updates a community contact. Admin only."""
+    if current_user.get("role") != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin permission is required")
+
+    if not get_contact_by_id(contact_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+
+    name = payload.name.strip()
+    designation = payload.designation.strip()
+    category = payload.category.strip()
+    phone = payload.phone.strip()
+    email = payload.email.strip()
+    availability = payload.availability.strip()
+    valid_categories = ["Management", "Maintenance", "Security", "Emergency", "Other"]
+
+    if not name or not designation or not category:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name, designation, and category are required")
+    if category not in valid_categories:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category. Choose from: {', '.join(valid_categories)}")
+
+    updated = update_contact(contact_id, name, designation, category, phone, email, availability)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update contact")
+    return updated
+
+
+@app.delete("/api/contacts/{contact_id}")
+def remove_contact(contact_id: int, current_user: dict = Depends(get_current_user)):
+    """Deletes a community contact. Admin only."""
+    if current_user.get("role") != "Admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin permission is required")
+
+    if not get_contact_by_id(contact_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+
+    if not delete_contact(contact_id):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete contact")
+    return {"message": "Contact deleted successfully"}
 
 # ─── Recommendations Endpoints ────────────────────────────────────────────────
 

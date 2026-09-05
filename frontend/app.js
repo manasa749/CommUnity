@@ -35,13 +35,112 @@ function apiFetch(path, token, options = {}) {
 
 // ─── Contacts Page ────────────────────────────────────────────────────────────
 
-function ContactsPage({ token }) {
+function ContactForm({ token, contact, onSaved, onCancel }) {
+    const isEdit = !!contact;
+
+    const [name, setName] = React.useState(contact?.name || "");
+    const [designation, setDesignation] = React.useState(contact?.designation || "");
+    const [category, setCategory] = React.useState(
+        CONTACT_CATEGORIES.filter(c => c !== "All").includes(contact?.category)
+            ? contact.category
+            : "Maintenance"
+    );
+    const [categoryOther, setCategoryOther] = React.useState(
+        contact && !CONTACT_CATEGORIES.filter(c => c !== "All").includes(contact.category)
+            ? contact.category
+            : ""
+    );
+    const [phone, setPhone] = React.useState(contact?.phone || "");
+    const [email, setEmail] = React.useState(contact?.email || "");
+    const [availability, setAvailability] = React.useState(contact?.availability || "");
+    const [error, setError] = React.useState("");
+    const [saving, setSaving] = React.useState(false);
+
+    const knownCategories = CONTACT_CATEGORIES.filter(c => c !== "All");
+    const effectiveCategory = category === "Other" ? categoryOther.trim() : category;
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        setError("");
+
+        if (!name.trim() || !designation.trim() || !effectiveCategory) {
+            setError("Name, designation, and category are required.");
+            return;
+        }
+        if (category === "Other" && !categoryOther.trim()) {
+            setError("Please enter a category name.");
+            return;
+        }
+
+        setSaving(true);
+        apiFetch(isEdit ? `/api/contacts/${contact.id}` : "/api/contacts", token, {
+            method: isEdit ? "PUT" : "POST",
+            body: JSON.stringify({
+                name: name.trim(),
+                designation: designation.trim(),
+                category: effectiveCategory,
+                phone: phone.trim(),
+                email: email.trim(),
+                availability: availability.trim()
+            })
+        })
+            .then(saved => { setSaving(false); onSaved(saved); })
+            .catch(err => { setError(err.message || "Could not save contact."); setSaving(false); });
+    };
+
+    return (
+        <div className="card">
+            <button className="btn-back" onClick={onCancel}>{isEdit ? "Cancel Edit" : "Back to Contacts"}</button>
+            <h2>{isEdit ? "Edit Contact" : "Add Contact"}</h2>
+            {error && <div className="error-panel">{error}</div>}
+            <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                    <label>Name</label>
+                    <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Contact name" />
+                </div>
+                <div className="form-group">
+                    <label>Designation</label>
+                    <input type="text" value={designation} onChange={e => setDesignation(e.target.value)} placeholder="e.g. Maintenance Manager" />
+                </div>
+                <div className="form-group">
+                    <label>Category</label>
+                    <select value={category} onChange={e => { setCategory(e.target.value); if (e.target.value !== "Other") setCategoryOther(""); }} className="form-select">
+                        {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    {category === "Other" && (
+                        <input type="text" value={categoryOther} onChange={e => setCategoryOther(e.target.value)} placeholder="Enter category name" style={{ marginTop: "0.5rem" }} />
+                    )}
+                </div>
+                <div className="form-group">
+                    <label>Phone <span className="label-optional">(optional)</span></label>
+                    <input type="text" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" />
+                </div>
+                <div className="form-group">
+                    <label>Email <span className="label-optional">(optional)</span></label>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" />
+                </div>
+                <div className="form-group">
+                    <label>Availability <span className="label-optional">(optional)</span></label>
+                    <input type="text" value={availability} onChange={e => setAvailability(e.target.value)} placeholder="e.g. Mon–Sat, 9am–6pm" />
+                </div>
+                <button type="submit" className="btn-primary" disabled={saving}>
+                    {saving ? "Saving..." : (isEdit ? "Save Changes" : "Add Contact")}
+                </button>
+            </form>
+        </div>
+    );
+}
+
+function ContactsPage({ token, user }) {
+    const isAdmin = user && user.role === "Admin";
     const [contacts, setContacts] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState("");
     const [search, setSearch] = React.useState("");
     const [category, setCategory] = React.useState("All");
+    const [view, setView] = React.useState("list");
     const [selected, setSelected] = React.useState(null);
+    const [editing, setEditing] = React.useState(null);
 
     const fetchContacts = (cat, q) => {
         setLoading(true); setError("");
@@ -57,26 +156,56 @@ function ContactsPage({ token }) {
 
     const handleSearch = (e) => { e.preventDefault(); fetchContacts(category, search); };
     const handleCategoryChange = (cat) => { setCategory(cat); fetchContacts(cat, search); };
+    const handleSaved = () => {
+        setView("list"); setSelected(null); setEditing(null); fetchContacts(category, search);
+    };
+    const handleDelete = (contact) => {
+        if (!window.confirm(`Delete "${contact.name}"? This action cannot be undone.`)) return;
+        apiFetch(`/api/contacts/${contact.id}`, token, { method: "DELETE" })
+            .then(() => { setView("list"); setSelected(null); fetchContacts(category, search); })
+            .catch(err => setError(err.message || "Could not delete contact."));
+    };
 
-    if (selected) {
+    if (view === "add") {
+        return <ContactForm token={token} onSaved={handleSaved} onCancel={() => setView("list")} />;
+    }
+
+    if (view === "edit" && editing) {
+        return <ContactForm token={token} contact={editing} onSaved={handleSaved} onCancel={() => { setView("detail"); setEditing(null); }} />;
+    }
+
+    if (view === "detail" && selected) {
         return (
             <div className="card">
-                <button className="btn-back" onClick={() => setSelected(null)}>Back to Contacts</button>
-                <h2>{selected.name}</h2>
-                <span className={`category-badge cat-${selected.category.toLowerCase()}`}>{selected.category}</span>
+                <button className="btn-back" onClick={() => { setView("list"); setSelected(null); }}>Back to Contacts</button>
+                <div className="rec-detail-header">
+                    <div>
+                        <h2>{selected.name}</h2>
+                        <span className={`category-badge cat-${selected.category.toLowerCase()}`}>{selected.category}</span>
+                    </div>
+                </div>
                 <div className="detail-grid">
                     <div className="detail-row"><strong>Designation</strong><span>{selected.designation}</span></div>
                     {selected.phone && <div className="detail-row"><strong>Phone</strong><span>{selected.phone}</span></div>}
                     {selected.email && <div className="detail-row"><strong>Email</strong><span>{selected.email}</span></div>}
                     {selected.availability && <div className="detail-row"><strong>Availability</strong><span>{selected.availability}</span></div>}
                 </div>
+                {isAdmin && (
+                    <div className="detail-actions">
+                        <button className="btn-primary btn-sm" style={{ width: "auto" }} onClick={() => { setEditing(selected); setView("edit"); }}>Edit</button>
+                        <button className="btn-danger-outline btn-sm" onClick={() => handleDelete(selected)}>Delete</button>
+                    </div>
+                )}
             </div>
         );
     }
 
     return (
         <div className="card">
-            <h2>Community Contacts</h2>
+            <div className="section-header">
+                <h2>Community Contacts</h2>
+                {isAdmin && <button className="btn-primary btn-sm" onClick={() => setView("add")}>+ Add Contact</button>}
+            </div>
             <p className="info-text">Find emergency numbers, management, maintenance, and security contacts.</p>
             <form onSubmit={handleSearch} className="search-bar">
                 <input type="text" placeholder="Search contacts..." value={search} onChange={e => setSearch(e.target.value)} />
@@ -93,7 +222,7 @@ function ContactsPage({ token }) {
             {!loading && contacts.length > 0 && (
                 <div className="list">
                     {contacts.map(c => (
-                        <div key={c.id} className="list-item" onClick={() => setSelected(c)}>
+                        <div key={c.id} className="list-item" onClick={() => { setSelected(c); setView("detail"); }}>
                             <div className="list-item-main">
                                 <span className="list-item-title">{c.name}</span>
                                 <span className="list-item-sub">{c.designation}</span>
@@ -497,7 +626,7 @@ function IssuesPage({ token, user }) {
             .catch(err => { setError(err.message); setLoading(false); });
     };
 
-    React.useEffect(() => { fetchIssues("All", "All", "", userRole === "Admin"); }, []);
+    React.useEffect(() => { fetchIssues("All", "All", "", userRole !== "Admin"); }, []);
 
     const handleSearch = (e) => { e.preventDefault(); fetchIssues(category, statusFilter, search, onlyMine); };
     const handleCategoryChange = (e) => { const cat = e.target.value; setCategory(cat); fetchIssues(cat, statusFilter, search, onlyMine); };
@@ -1108,7 +1237,7 @@ function App() {
                     </div>
                 );
             case "contacts":
-                return <ContactsPage token={token} />;
+                return <ContactsPage token={token} user={user} />;
             case "recommendations":
                 return <RecommendationsPage token={token} user={user} />;
             case "issues":
