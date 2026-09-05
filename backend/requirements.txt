@@ -8,4 +8,3 @@ cloud-sql-python-connector>=1.9.0
 google-auth>=2.29.0
 google-adk>=1.0.0
 google-genai>=1.38.0
-litellm>=1.75.0

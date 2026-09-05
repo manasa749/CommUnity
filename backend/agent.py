@@ -4,9 +4,10 @@ import datetime
 import json
 
 from google.adk.agents import Agent
-from google.adk.models.lite_llm import LiteLlm
+from google.adk.models.google_llm import Gemini
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools import ToolContext
+from google.genai.types import GenerateContentConfig, ThinkingConfig
 
 from database import (
     get_all_contacts, get_contact_by_id, create_contact as db_create_contact, update_contact as db_update_contact, delete_contact as db_delete_contact, get_all_residents,
@@ -18,7 +19,7 @@ from database import (
     create_recommendation as db_create_recommendation, update_recommendation_details as db_update_recommendation,
 )
 
-_MODEL = "groq/openai/gpt-oss-20b"
+_MODEL = "gemini-3.7-flash"
 _APP_NAME = "community_agent"
 session_service = InMemorySessionService()
 
@@ -628,10 +629,9 @@ Be concise and action-oriented. If a request is outside supported tools, explain
 
 community_agent = Agent(
     name="community_agent",
-    model=LiteLlm(
-        model=_MODEL,
-        reasoning_effort="low",
-        include_reasoning=False,
+    model=Gemini(model=_MODEL),
+    generate_content_config=GenerateContentConfig(
+        thinking_config=ThinkingConfig(thinking_level="low"),
     ),
     description="CommUnity Agent for community information and authorized operations.",
     instruction=_SYSTEM_PROMPT,
