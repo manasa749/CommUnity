@@ -387,10 +387,10 @@ def edit_recommendation(
     if not service_name or not category or not description:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Service name, category, and description are required")
 
-    valid_categories = ["Broadband", "Plumber", "Electrician", "AC Service", "Appliance Repair",
-                        "Cleaning", "Tutor", "Healthcare", "Laundry", "Other"]
-    if category not in valid_categories:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category")
+    # The UI uses "Other" as a selector and stores the custom category label
+    # entered by the user (for example, "Yoga" or "Pet Care"). Therefore the
+    # backend must accept any non-empty category string here rather than
+    # rejecting custom labels as invalid predefined categories.
 
     updated = update_recommendation_details(rec_id, service_name, category, description, contact_info)
     if not updated:
@@ -430,14 +430,17 @@ def list_issues(
     only_mine: bool = Query(default=False),
     current_user: dict = Depends(get_current_user)
 ):
-    """Returns community issues with filters. Residents can filter to their own reported issues."""
-    # Residents must never be able to browse another resident's issues.
-    # Admins may see the full issue history.
-    if current_user.get("role") == "Admin":
-        filter_user_id = current_user["id"] if only_mine else None
-    else:
-        filter_user_id = current_user["id"]
-    return get_all_issues(category=category, status=status, search=search, user_id=filter_user_id)
+    """Returns community issues with filters. Residents may view all issues, but only their own reporter identity."""
+    # Both roles may browse the community issue list. The UI may optionally
+    # request only_mine=true, while backend access control still prevents a
+    # Resident from modifying issues. Reporter identity is redacted below.
+    filter_user_id = current_user["id"] if only_mine else None
+    issues = get_all_issues(category=category, status=status, search=search, user_id=filter_user_id)
+    if current_user.get("role") != "Admin":
+        for issue in issues:
+            if issue.get("created_by_user_id") != current_user["id"]:
+                issue.pop("created_by_name", None)
+    return issues
 
 
 @app.get("/api/issues/{issue_id}")
@@ -447,7 +450,7 @@ def get_issue(issue_id: int, current_user: dict = Depends(get_current_user)):
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
     if current_user.get("role") != "Admin" and issue.get("created_by_user_id") != current_user["id"]:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+        issue.pop("created_by_name", None)
     return issue
 
 

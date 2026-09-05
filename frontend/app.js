@@ -626,7 +626,7 @@ function IssuesPage({ token, user }) {
             .catch(err => { setError(err.message); setLoading(false); });
     };
 
-    React.useEffect(() => { fetchIssues("All", "All", "", userRole !== "Admin"); }, []);
+    React.useEffect(() => { fetchIssues("All", "All", "", false); }, []);
 
     const handleSearch = (e) => { e.preventDefault(); fetchIssues(category, statusFilter, search, onlyMine); };
     const handleCategoryChange = (e) => { const cat = e.target.value; setCategory(cat); fetchIssues(cat, statusFilter, search, onlyMine); };

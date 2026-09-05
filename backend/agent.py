@@ -128,7 +128,9 @@ def search_issues(query: str = "", category: str = "", status: str = "", tool_co
     Words such as "opened", "reported", or "exists" do not mean status=Open
     unless the user explicitly asks for status Open.
 
-    Residents are restricted to their own issues; Admins can search all issues.
+    Residents can search and view all community issues. Reporter identity is
+    shown only for the authenticated resident's own issue; Admins may see all
+    reporter details.
     """
     state, error = _require_user(tool_context)
     if error:
@@ -137,13 +139,15 @@ def search_issues(query: str = "", category: str = "", status: str = "", tool_co
     status = status.strip()
     if status and status not in ISSUE_STATUSES:
         return {"error": f"Invalid status. Choose from: {', '.join(ISSUE_STATUSES)}"}
-    user_id = None if state.get("user_role") == "Admin" else state["user_id"]
     results = get_all_issues(
         category=category or None,
         status=status or None,
         search=query.strip() or None,
-        user_id=user_id,
     )
+    if state.get("user_role") != "Admin":
+        for issue in results:
+            if issue.get("created_by_user_id") != state["user_id"]:
+                issue.pop("created_by_name", None)
     return {"issues": results, "count": len(results)}
 
 
