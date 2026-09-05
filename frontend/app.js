@@ -1092,7 +1092,7 @@ function CommUnityAgent({ token, user, onClose }) {
                 {error && <div className="agent-error">{error}</div>}
                 <form className="agent-input-row" onSubmit={sendMessage}>
                     <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask CommUnity Agent…" disabled={busy} />
-                    <button type="submit" className="btn-primary btn-sm" disabled={busy || !input.trim()}>Send</button>
+                    <button type="submit" className={`btn-primary btn-sm agent-send-button${busy || !input.trim() ? " is-disabled" : ""}`} disabled={busy || !input.trim()}>Send</button>
                 </form>
                 <div className="agent-hint">Writes require your explicit confirmation.</div>
             </section>

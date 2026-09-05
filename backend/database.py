@@ -455,8 +455,14 @@ def get_all_contacts(category: str = None, search: str = None):
     params = []
 
     if category and category != "All":
-        query += " AND category = %s"
-        params.append(category)
+        if category == "Other":
+            # "Other" is a UI bucket: include the literal Other value and
+            # any custom category labels entered through the Other field.
+            query += " AND (category = %s OR category NOT IN (%s,%s,%s,%s))"
+            params.extend(["Other", "Management", "Maintenance", "Security", "Emergency"])
+        else:
+            query += " AND category = %s"
+            params.append(category)
 
     if search:
         query += " AND (name ILIKE %s OR designation ILIKE %s)"
@@ -546,8 +552,12 @@ def get_all_recommendations(category: str = None, search: str = None):
     params = []
 
     if category and category != "All":
-        query += " AND category = %s"
-        params.append(category)
+        if category == "Other":
+            query += " AND (category = %s OR category NOT IN (%s,%s,%s,%s,%s,%s,%s,%s,%s))"
+            params.extend(["Other", "Broadband", "Plumber", "Electrician", "AC Service", "Appliance Repair", "Cleaning", "Tutor", "Healthcare", "Laundry"])
+        else:
+            query += " AND category = %s"
+            params.append(category)
 
     if search:
         query += " AND (service_name ILIKE %s OR description ILIKE %s)"

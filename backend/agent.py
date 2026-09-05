@@ -156,6 +156,17 @@ def list_residents(tool_context: ToolContext = None) -> dict:
     return {"residents": residents, "count": len(residents)}
 
 
+def check_admin_access(action: str = "", tool_context: ToolContext = None) -> dict:
+    """Check whether the authenticated user may perform an Admin-only action."""
+    state, error = _require_user(tool_context)
+    if error:
+        return error
+    action = action.strip() or "this action"
+    if state.get("user_role") != "Admin":
+        return {"error": f"Admin permission is required for {action}. You are signed in as a Resident."}
+    return {"status": "allowed", "role": "Admin", "action": action}
+
+
 def create_issue(
     title: str,
     description: str,
@@ -557,6 +568,7 @@ READ TOOLS:
 - get_my_issues: only the authenticated user's issues.
 - search_issues: Residents are restricted to their own issues; Admins can see all.
 - list_residents: Admin only; returns resident name, email, flat/unit number, and role. Never expose passwords, hashes, tokens, credentials, or other internal authentication data.
+- check_admin_access: checks the authenticated role before an Admin-only request.
 
 CATEGORY RULES:
 - Issues: classify from the user's stated problem and context, not from an assumed technical cause.
@@ -576,6 +588,11 @@ ADMIN WRITES:
 - create/update announcement
 - update_issue
 - update any recommendation
+
+ADMIN-ONLY REQUESTS:
+- When a Resident asks for an Admin-only action, first use check_admin_access with a concise description of the requested action.
+- If it returns a permission error, tell the Resident plainly that their current Resident role does not allow that action. Do not claim a tool is missing.
+- When the user is an Admin, continue with the relevant Admin tool and its normal confirmation flow.
 
 MISSING INFORMATION — CRITICAL:
 - Never invent required or optional user-provided values.
@@ -627,9 +644,11 @@ community_agent = Agent(
         create_contact,
         update_contact,
         delete_contact,
+        check_admin_access,
         list_residents,
         update_recommendation,
         create_announcement,
         update_announcement,
+        update_issue,
     ],
 )

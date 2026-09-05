@@ -230,8 +230,10 @@ def add_contact(payload: CreateContactRequest, current_user: dict = Depends(get_
 
     if not name or not designation or not category:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name, designation, and category are required")
-    if category not in valid_categories:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category. Choose from: {', '.join(valid_categories)}")
+    # "Other" in the UI allows a custom category label. Keep predefined
+    # categories valid, and also accept a non-empty custom category value.
+    if not category.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category is required")
 
     contact = create_contact(name, designation, category, phone, email, availability)
     if not contact:
@@ -258,8 +260,10 @@ def edit_contact(contact_id: int, payload: UpdateContactRequest, current_user: d
 
     if not name or not designation or not category:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name, designation, and category are required")
-    if category not in valid_categories:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category. Choose from: {', '.join(valid_categories)}")
+    # "Other" in the UI allows a custom category label. Keep predefined
+    # categories valid, and also accept a non-empty custom category value.
+    if not category.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category is required")
 
     updated = update_contact(contact_id, name, designation, category, phone, email, availability)
     if not updated:
@@ -321,8 +325,9 @@ def add_recommendation(
 
     valid_categories = ["Broadband", "Plumber", "Electrician", "AC Service", "Appliance Repair",
                         "Cleaning", "Tutor", "Healthcare", "Laundry", "Other"]
-    if category not in valid_categories:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category. Choose from: {', '.join(valid_categories)}")
+    # The UI's Other option stores the custom label entered by the user.
+    if not category:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category is required")
 
     created_date = datetime.date.today().isoformat()
     rec = create_recommendation(
@@ -561,8 +566,9 @@ def add_announcement(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title and content are required")
 
     valid_categories = ["General", "Maintenance", "Security", "Water", "Other"]
-    if category not in valid_categories:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid category")
+    # The UI's Other option stores the custom label entered by the user.
+    if not category:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category is required")
 
     published_date = datetime.date.today().isoformat()
     ann = create_announcement(
