@@ -21,3 +21,5 @@ env/
 # Environment configurations
 .env
 backend/.env
+
+backend/.adk/
