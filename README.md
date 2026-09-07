@@ -88,9 +88,6 @@ Announcements can be published or archived. Archived announcements are retained 
 - JWT authentication
 - bcrypt password hashing
 
-#<details>
-<summary><strong>Database</strong></summary>
-
 ## Database
 
 - PostgreSQL on Google Cloud SQL
@@ -262,8 +259,6 @@ The database stores:
 The deployed application and local application can use the same Cloud SQL database when configured with the appropriate credentials and environment variables.
 
 ---
-
-</details>
 
 <details>
 <summary><strong>CommUnity Agent</strong></summary>
