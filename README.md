@@ -426,39 +426,28 @@ The following names are used by the application configuration:
 
 ## Screenshots
 
-The repository includes a `screenshots/` folder with the project screenshots. The main README should highlight the most representative views:
+The repository includes a `screenshots/` folder with the project screenshots.
 
-### Resident
+Example:
 
-- Resident Dashboard
-- Contacts
-- Recommendations
-- Issues
-- Announcements
-- Resident Agent interaction
-
-### Admin
-
-- Admin Dashboard
-- Admin Agent interaction
-- Admin management operation
-
-### Security
-
-- Resident attempting an Admin-only action and receiving a permission denial
-
-Example GitHub Markdown syntax:
-
-```markdown
+### Login
 ![Login](screenshots/02_login.png)
-![Resident Dashboard](screenshots/03_resident_dashboard.png)
-![Issues](screenshots/06_resident_issues.png)
-![Resident Agent](screenshots/08_resident_agent-02.png)
-![Admin Agent](screenshots/13_admin_agent.png)
-![Permission Denied](screenshots/08_resident_agent_permission_denied.png)
-```
 
-Use the actual filenames from the `screenshots/` folder when adding the final images.
+### Resident Dashboard
+![Resident Dashboard](screenshots/03_resident_dashboard.png)
+
+### Issues
+![Issues](screenshots/06_resident_issues.png)
+
+### Resident Agent
+![Resident Agent](screenshots/08_resident_agent-02.png)
+
+### Admin Agent
+![Admin Agent](screenshots/13_admin_agent.png)
+
+### Permission Denied
+![Permission Denied](screenshots/08_resident_agent_permission_denied.png)
+
 
 ## Troubleshooting
 
