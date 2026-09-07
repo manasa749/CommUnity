@@ -2,6 +2,8 @@
 
 **AI-Powered Community Intelligence Platform**
 
+For local development, deployment, security, and Agent details, see the sections below.
+
 CommUnity is a residential community portal that helps residents access community information, share service recommendations, report and track issues, and read community announcements. Administrators can manage community information and issue workflows through the same application. The platform also includes a role-aware **CommUnity Agent** for natural-language community queries and authorized actions.
 
 ## Problem Statement
@@ -86,7 +88,10 @@ Announcements can be published or archived. Archived announcements are retained 
 - JWT authentication
 - bcrypt password hashing
 
-### Database
+#<details>
+<summary><strong>Database</strong></summary>
+
+## Database
 
 - PostgreSQL on Google Cloud SQL
 - `pg8000` PostgreSQL driver
@@ -114,35 +119,8 @@ Announcements can be published or archived. Archived announcements are retained 
 
 ## Architecture
 
-```text
-User Browser
-    │
-    ▼
-CommUnity Frontend
-(React / HTML / CSS / JS)
-    │
-    ▼
-FastAPI Application
-    │
-    ├──────────────► JWT Authentication / Authorization
-    │
-    ├──────────────► Cloud SQL PostgreSQL
-    │                    │
-    │                    └── Users, Contacts, Recommendations,
-    │                        Votes, Issues, Announcements
-    │
-    └──────────────► CommUnity Agent (ADK)
-                         │
-                         ▼
-                    Gemini via Vertex AI
-                         │
-                         ▼
-                    Authorized Agent Tools
-```
-
 The FastAPI backend is the application's security boundary. The Agent receives the authenticated user's identity and role in its tool context, and tools enforce the appropriate permissions before performing protected operations.
 
-### Architecture Diagram
 
 ```mermaid
 flowchart TD
@@ -183,6 +161,9 @@ CommUnity/
 
 ---
 
+<details>
+<summary><strong>Getting Started Locally</strong></summary>
+
 ## Getting Started Locally
 
 ### 1. Clone the repository
@@ -216,22 +197,7 @@ Create:
 backend/.env
 ```
 
-Use the required configuration for the target environment. Do not commit this file.
-
-Typical variables include:
-
-```text
-INSTANCE_CONNECTION_NAME=<Cloud SQL instance connection name>
-DB_NAME=<database name>
-DB_USER=<database user>
-DB_PASSWORD=<secret>
-JWT_SECRET=<secret>
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=120
-GOOGLE_GENAI_USE_VERTEXAI=True
-GOOGLE_CLOUD_PROJECT=<Google Cloud project ID>
-GOOGLE_CLOUD_LOCATION=global
-```
+Copy the required configuration from `backend/.env.example` and provide the values for the target environment. Do not commit this file.
 
 For local Google Cloud authentication, use Application Default Credentials as required by the Google Cloud client libraries.
 
@@ -249,25 +215,10 @@ Open the local application at the address shown by Uvicorn (commonly `http://127
 
 ---
 
-## Development Workflow
+</details>
 
-### Backend
-
-Run the FastAPI development server from `backend/`:
-
-```bash
-uvicorn main:app --reload --port 8000
-```
-
-### Frontend
-
-The frontend is served by the FastAPI application from the sibling `frontend/` directory.
-
-### Database
-
-Production data is stored in PostgreSQL on Cloud SQL. Local development must use the environment configuration appropriate for the selected database.
-
----
+<details>
+<summary><strong>Authentication and Roles</strong></summary>
 
 ## Authentication and Roles
 
@@ -291,6 +242,8 @@ Admin creation is intentionally not exposed through normal public signup. Admin 
 
 ---
 
+</details>
+
 ## Database
 
 The production application uses PostgreSQL on Google Cloud SQL.
@@ -309,6 +262,11 @@ The database stores:
 The deployed application and local application can use the same Cloud SQL database when configured with the appropriate credentials and environment variables.
 
 ---
+
+</details>
+
+<details>
+<summary><strong>CommUnity Agent</strong></summary>
 
 ## CommUnity Agent
 
@@ -363,6 +321,11 @@ Agent session state is ephemeral; application data is persisted in Cloud SQL rat
 
 ---
 
+</details>
+
+<details>
+<summary><strong>Cloud Run Deployment</strong></summary>
+
 ## Cloud Run Deployment
 
 The project is deployed as a container to Google Cloud Run.
@@ -393,7 +356,7 @@ Production environment variables and secrets are supplied through Cloud Run conf
 
 ### Runtime services
 
-The Cloud Run runtime service account is granted only the Google Cloud permissions required by the application, including access needed for:
+The Cloud Run runtime service account is configured with the Google Cloud permissions required by the application, including access to:
 
 - Cloud SQL
 - Vertex AI
@@ -402,6 +365,11 @@ The Cloud Run runtime service account is granted only the Google Cloud permissio
 Cloud Run is configured with `min=0` so idle application instances can scale down.
 
 ---
+
+</details>
+
+<details>
+<summary><strong>Required Environment Variables</strong></summary>
 
 ## Required Environment Variables
 
@@ -424,11 +392,12 @@ The following names are used by the application configuration:
 
 ---
 
+</details>
+
 ## Screenshots
 
 The repository includes a `screenshots/` folder with the project screenshots.
 
-Example:
 
 ### Login
 ![Login](screenshots/02_login.png)
@@ -449,6 +418,9 @@ Example:
 ![Permission Denied](screenshots/08_resident_agent_permission_denied.png)
 
 
+<details>
+<summary><strong>Troubleshooting</strong></summary>
+
 ## Troubleshooting
 
 ### Unable to log in
@@ -467,15 +439,10 @@ Check that the Cloud SQL instance is running and that the Cloud Run runtime serv
 
 Check the Cloud Run revision logs and verify that required environment variables and Secret Manager references are configured.
 
-## Cost-Conscious Cloud Usage
+</details>
 
-The deployed Cloud Run service is configured with `min=0` and `max=1` to limit idle compute and unexpected scaling.
-
-Cloud SQL is a separate resource. When the application is not being tested or evaluated, the Cloud SQL instance can be stopped to reduce instance charges. It must be running before using the deployed application.
-
-Do not delete the Cloud SQL instance solely to reduce cost; stopping and deleting are different operations.
-
----
+<details>
+<summary><strong>Repository and Secret Hygiene</strong></summary>
 
 ## Repository and Secret Hygiene
 
@@ -500,7 +467,4 @@ Also keep out of GitHub:
 
 ---
 
-## Notes
-
-- The deployed production configuration uses **Vertex AI** for Gemini rather than a Gemini API key stored in the repository.
-- `ADK` is used to orchestrate the CommUnity Agent and its tools; FastAPI remains the application's authentication and business/security boundary.
+</details>
