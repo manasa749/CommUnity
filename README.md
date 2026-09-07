@@ -2,8 +2,6 @@
 
 **AI-Powered Community Intelligence Platform**
 
-For local development, deployment, security, and Agent details, see the sections below.
-
 CommUnity is a residential community portal that helps residents access community information, share service recommendations, report and track issues, and read community announcements. Administrators can manage community information and issue workflows through the same application. The platform also includes a role-aware **CommUnity Agent** for natural-language community queries and authorized actions.
 
 ## Problem Statement
